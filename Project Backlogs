@@ -1,0 +1,67 @@
+Product Backlog – Food Delivery App (Team Alpha)
+
+The Product Backlog is a prioritized list of features and tasks that the team will complete.
+
+Priority	  User Story / Backlog Item	                                     Owner
+
+P1	        Gather requirements from stakeholders and KB Sir    	         Requirement Analyst
+P1	        Create Software Requirements Specification (SRS)	             Requirement Analyst
+P1          Design system architecture	                                   Designer
+P1	        Design database schema	                                       Designer
+P1          Create GitHub repository and branching strategy              	 Developer 1
+P1	        Set up Jenkins CI pipeline	                                   Developer 2
+P2	        User registration and login	                                   Developers
+P2	        User profile management	                                       Developers
+P2	        Restaurant registration and management	                       Developers
+P2	        Food menu display	                                             Developers
+P2	        Search and filter food items	                                 Developers
+P2	        Add items to cart	                                             Developers
+P2	        Place food orders	                                             Developers
+P2	        Order tracking system	                                         Developers
+P3	        Payment gateway integration	                                   Developers
+P3	        Order history	                                                 Developers
+P3	        Notifications for order status	                               Developers
+P3	        Testing of all modules	                                       Tester
+P3	        Bug fixing and regression testing	                             Tester
+P4	        Dockerize frontend application	                               Deployment Team
+P4	        Dockerize backend application	                                 Deployment Team
+P4	        Configure Docker Compose	                                     Deployment Team
+P4	        Deploy application on server/cloud	                           Deployment Team
+P4	        Configure monitoring and logs	                                 Deployment Team
+P5	        Prepare user documentation	                                   Entire Team
+P5	        Final project demonstration	                                   Entire Team
+
+
+
+Sprint-wise Backlog
+
+Sprint 1 (Week-1)
+
+Requirements gathering
+SRS preparation
+Architecture design
+Database design
+
+
+Sprint 2 (Week-2)
+
+GitHub setup
+Jenkins setup
+User authentication
+Restaurant module
+
+
+Sprint 3 (Week-3)
+
+Menu management
+Cart functionality
+Order placement
+Payment integration
+
+
+Sprint 4 (Week-4)
+
+Testing
+Dockerization
+Deployment
+Documentation and Demo
