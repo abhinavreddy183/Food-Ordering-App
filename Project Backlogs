@@ -3,34 +3,70 @@ Product Backlog – Food Ordering App
 
 
 Backlog ID     User Story / Requirement	                                                          Priority	                Sprint
+PB-01	         Gather requirements from stakeholders and KB Sir	                                  High	                    Sprint 1	
+PB-02	         Create Software Requirements Specification (SRS)	                                  High	                    Sprint 1	
+PB-03	         Design system architecture	                                                        High	                    Sprint 1
+PB-04	         Design database schema	                                                            High	                    Sprint 1	
+PB-05	         As a user, I want to register an account so that I can use the application.	      High	                    Sprint 1
+PB-06	         As a user, I want to log in securely using my credentials.	                        High	                    Sprint 1
+PB-07	         As a user, I want to reset my password if I forget it.	                            Medium	                  Sprint 1
+PB-08	         As an admin, I want to manage user accounts.	                                      Medium	                  Sprint 1
+PB-09	         Set up GitHub repository and branching strategy.	                                  High	                    Sprint 1
+PB-10	         Configure Jenkins CI pipeline for automated builds.	                              High	                    Sprint 1
+PB-11	         Create Docker environment for application deployment.	                            High	                    Sprint 1
+PB-12	         As a user, I want to view a list of restaurants.	                                  High	                    Sprint 2
+PB-13	         As a user, I want to search restaurants by name or cuisine.	                      Medium	                  Sprint 2
+PB-14	         As a user, I want to view restaurant menus.	                                      High	                    Sprint 2
+PB-15	         As an admin, I want to add, update, and remove menu items.	                        Medium	                  Sprint 2
+PB-16	         As a user, I want to view food item details and prices.	                          High	                    Sprint 2
+PB-17	         As a user, I want to add food items to my cart.	                                  High	                    Sprint 3
+PB-18	         As a user, I want to update item quantities in my cart.	                          High	                    Sprint 3
+PB-19	         As a user, I want to remove items from my cart.	                                  High 	                    Sprint 3
+PB-20	         As a user, I want to place an order.	                                              High	                    Sprint 3
+PB-21	         As a user, I want to view my order history.	                                      Medium	                  Sprint 3
+PB-22	         As a restaurant admin, I want to receive customer orders.	                        High	                    Sprint 3  
+PB-23	         As a user, I want to make online payments.	                                        High	                    Sprint 4
+PB-24	         As a user, I want to receive order confirmation notifications.	                    Medium	                  Sprint 4
+PB-25	         As a user, I want to track my order status.	                                      High	                    Sprint 4
+PB-26	         Perform system integration testing.	                                              High	                    Sprint 4
+PB-27	         Containerize the application using Docker.	                                        High	                    Sprint 4
+PB-28	         Deploy application to the production environment.	                                High	                    Sprint 4
+PB-29	         Monitor application health and logs.	                                              Medium	                  Sprint 4
+PB-30	         Prepare project documentation and user manual.	                                    Medium	                  Sprint 4
 
-PB-01	         As a user, I want to register an account so that I can use the application.	      High	                    Sprint 1
-PB-02	         As a user, I want to log in securely using my credentials.	                        High	                    Sprint 1
-PB-03	         As a user, I want to reset my password if I forget it.	                            Medium	                  Sprint 1
-PB-04	         As an admin, I want to manage user accounts.	                                      Medium	                  Sprint 1
-PB-05	         Set up GitHub repository and branching strategy.	                                  High	                    Sprint 1
-PB-06	         Configure Jenkins CI pipeline for automated builds.	                              High	                    Sprint 1
-PB-07	         Create Docker environment for application deployment.	                            High	                    Sprint 1
-PB-08	         As a user, I want to view a list of restaurants.	                                  High	                    Sprint 2
-PB-09	         As a user, I want to search restaurants by name or cuisine.	                      Medium	                  Sprint 2
-PB-10	         As a user, I want to view restaurant menus.	                                      High	                    Sprint 2
-PB-11	         As an admin, I want to add, update, and remove menu items.	                        Medium	                  Sprint 2
-PB-12	         As a user, I want to view food item details and prices.	                          High	                    Sprint 2
-PB-13	         As a user, I want to add food items to my cart.	                                  High	                    Sprint 3
-PB-14	         As a user, I want to update item quantities in my cart.	                          High	                    Sprint 3
-PB-15	         As a user, I want to remove items from my cart.	                                  High 	                    Sprint 3
-PB-16	         As a user, I want to place an order.	                                              High	                    Sprint 3
-PB-17	         As a user, I want to view my order history.	                                      Medium	                  Sprint 3
-PB-18	         As a restaurant admin, I want to receive customer orders.	                        High	                    Sprint 3  
-PB-19	         As a user, I want to make online payments.	                                        High	                    Sprint 4
-PB-20	         As a user, I want to receive order confirmation notifications.	                    Medium	                  Sprint 4
-PB-21	         As a user, I want to track my order status.	                                      High	                    Sprint 4
-PB-22	         Perform system integration testing.	                                              High	                    Sprint 4
-PB-23	         Containerize the application using Docker.	                                        High	                    Sprint 4
-PB-24	         Deploy application to the production environment.	                                High	                    Sprint 4
-PB-25	         Monitor application health and logs.	                                              Medium	                  Sprint 4
-PB-26	         Prepare project documentation and user manual.	                                    Medium	                  Sprint 4
 
+Product Backlog Owners
+Backlog ID             	Owner
+PB-01	                  Requirement Analyst
+PB-02	                  Requirement Analyst
+PB-03	                  Designer / System Architect
+PB-04	                  Designer / System Architect
+PB-05	                  Developer 1 & Developer 2
+PB-06	                  Developer 1 & Developer 2
+PB-07	                  Developer 1 & Developer 2
+PB-08	                  Developer 2
+PB-09	                  Developer 1 (GitHub Admin)
+PB-10	                  Developer 2 (Jenkins Admin)
+PB-11	                  Deployment Engineer 1 & Deployment Engineer 2
+PB-12	                  Developer 1 & Developer 2
+PB-13	                  Developer 1 & Developer 2
+PB-14	                  Developer 1 & Developer 2
+PB-15	                  Developer 2
+PB-16	                  Developer 1 & Developer 2
+PB-17	                  Developer 1 & Developer 2
+PB-18	                  Developer 1 & Developer 2
+PB-19	                  Developer 1 & Developer 2
+PB-20	                  Developer 1 & Developer 2
+PB-21	                  Developer 1 & Developer 2
+PB-22	                  Developer 2
+PB-23	                  Developer 2
+PB-24	                  Developer 2
+PB-25	                  Developer 1 & Developer 2
+PB-26	                  Tester
+PB-27	                  Deployment Engineer 1
+PB-28	                  Deployment Engineer 2
+PB-29	                  Deployment Engineer 2
+PB-30	                  Requirement Analyst & Entire Team
 
 
 Prioritized Backlog (Top 10 Items)
