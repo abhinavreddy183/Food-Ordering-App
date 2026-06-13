@@ -1,67 +1,47 @@
-Product Backlog – Food Delivery App (Team Eta)
-
-The Product Backlog is a prioritized list of features and tasks that the team will complete.
-
-Priority	  User Story / Backlog Item	                                     Owner
-
-P1	        Gather requirements from stakeholders and KB Sir    	         Requirement Analyst
-P1	        Create Software Requirements Specification (SRS)	             Requirement Analyst
-P1          Design system architecture	                                   Designer
-P1	        Design database schema	                                       Designer
-P1          Create GitHub repository and branching strategy              	 Developer 1
-P1	        Set up Jenkins CI pipeline	                                   Developer 2
-P2	        User registration and login	                                   Developers
-P2	        User profile management	                                       Developers
-P2	        Restaurant registration and management	                       Developers
-P2	        Food menu display	                                             Developers
-P2	        Search and filter food items	                                 Developers
-P2	        Add items to cart	                                             Developers
-P2	        Place food orders	                                             Developers
-P2	        Order tracking system	                                         Developers
-P3	        Payment gateway integration	                                   Developers
-P3	        Order history	                                                 Developers
-P3	        Notifications for order status	                               Developers
-P3	        Testing of all modules	                                       Tester
-P3	        Bug fixing and regression testing	                             Tester
-P4	        Dockerize frontend application	                               Deployment Team
-P4	        Dockerize backend application	                                 Deployment Team
-P4	        Configure Docker Compose	                                     Deployment Team
-P4	        Deploy application on server/cloud	                           Deployment Team
-P4	        Configure monitoring and logs	                                 Deployment Team
-P5	        Prepare user documentation	                                   Entire Team
-P5	        Final project demonstration	                                   Entire Team
+Product Backlog – Food Ordering App
 
 
 
-Sprint-wise Backlog
+Backlog ID     User Story / Requirement	                                                          Priority	                Sprint
 
-Sprint 1 (Week-1)
+PB-01	         As a user, I want to register an account so that I can use the application.	      High	                    Sprint 1
+PB-02	         As a user, I want to log in securely using my credentials.	                        High	                    Sprint 1
+PB-03	         As a user, I want to reset my password if I forget it.	                            Medium	                  Sprint 1
+PB-04	         As an admin, I want to manage user accounts.	                                      Medium	                  Sprint 1
+PB-05	         Set up GitHub repository and branching strategy.	                                  High	                    Sprint 1
+PB-06	         Configure Jenkins CI pipeline for automated builds.	                              High	                    Sprint 1
+PB-07	         Create Docker environment for application deployment.	                            High	                    Sprint 1
+PB-08	         As a user, I want to view a list of restaurants.	                                  High	                    Sprint 2
+PB-09	         As a user, I want to search restaurants by name or cuisine.	                      Medium	                  Sprint 2
+PB-10	         As a user, I want to view restaurant menus.	                                      High	                    Sprint 2
+PB-11	         As an admin, I want to add, update, and remove menu items.	                        Medium	                  Sprint 2
+PB-12	         As a user, I want to view food item details and prices.	                          High	                    Sprint 2
+PB-13	         As a user, I want to add food items to my cart.	                                  High	                    Sprint 3
+PB-14	         As a user, I want to update item quantities in my cart.	                          High	                    Sprint 3
+PB-15	         As a user, I want to remove items from my cart.	                                  High 	                    Sprint 3
+PB-16	         As a user, I want to place an order.	                                              High	                    Sprint 3
+PB-17	         As a user, I want to view my order history.	                                      Medium	                  Sprint 3
+PB-18	         As a restaurant admin, I want to receive customer orders.	                        High	                    Sprint 3  
+PB-19	         As a user, I want to make online payments.	                                        High	                    Sprint 4
+PB-20	         As a user, I want to receive order confirmation notifications.	                    Medium	                  Sprint 4
+PB-21	         As a user, I want to track my order status.	                                      High	                    Sprint 4
+PB-22	         Perform system integration testing.	                                              High	                    Sprint 4
+PB-23	         Containerize the application using Docker.	                                        High	                    Sprint 4
+PB-24	         Deploy application to the production environment.	                                High	                    Sprint 4
+PB-25	         Monitor application health and logs.	                                              Medium	                  Sprint 4
+PB-26	         Prepare project documentation and user manual.	                                    Medium	                  Sprint 4
 
-Requirements gathering
-SRS preparation
-Architecture design
-Database design
 
 
-Sprint 2 (Week-2)
+Prioritized Backlog (Top 10 Items)
 
-GitHub setup
-Jenkins setup
-User authentication
-Restaurant module
-
-
-Sprint 3 (Week-3)
-
-Menu management
-Cart functionality
-Order placement
-Payment integration
-
-
-Sprint 4 (Week-4)
-
-Testing
-Dockerization
-Deployment
-Documentation and Demo
+User Registration
+User Login
+GitHub Repository Setup
+Jenkins CI Pipeline Setup
+Docker Environment Setup
+Restaurant Listing
+Menu Display
+Add to Cart
+Place Order
+Online Payment Integration
