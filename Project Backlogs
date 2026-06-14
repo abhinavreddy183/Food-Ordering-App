@@ -3,10 +3,10 @@ Product Backlog – Food Ordering App
 
 
 Backlog ID     User Story / Requirement	                                                          Priority	                Sprint
-PB-01	         Gather requirements from stakeholders and KB Sir	                                  High	                    Sprint 1	
-PB-02	         Create Software Requirements Specification (SRS)	                                  High	                    Sprint 1	
+PB-01	         Gather requirements from stakeholders and KB Sir	                                  High	                    Sprint 1
+PB-02	         Create Software Requirements Specification (SRS)	                                  High	                    Sprint 1
 PB-03	         Design system architecture	                                                        High	                    Sprint 1
-PB-04	         Design database schema	                                                            High	                    Sprint 1	
+PB-04	         Design database schema	                                                            High	                    Sprint 1
 PB-05	         As a user, I want to register an account so that I can use the application.	      High	                    Sprint 1
 PB-06	         As a user, I want to log in securely using my credentials.	                        High	                    Sprint 1
 PB-07	         As a user, I want to reset my password if I forget it.	                            Medium	                  Sprint 1
@@ -24,7 +24,7 @@ PB-18	         As a user, I want to update item quantities in my cart.	         
 PB-19	         As a user, I want to remove items from my cart.	                                  High 	                    Sprint 3
 PB-20	         As a user, I want to place an order.	                                              High	                    Sprint 3
 PB-21	         As a user, I want to view my order history.	                                      Medium	                  Sprint 3
-PB-22	         As a restaurant admin, I want to receive customer orders.	                        High	                    Sprint 3  
+PB-22	         As a restaurant admin, I want to receive customer orders.	                        High	                    Sprint 3
 PB-23	         As a user, I want to make online payments.	                                        High	                    Sprint 4
 PB-24	         As a user, I want to receive order confirmation notifications.	                    Medium	                  Sprint 4
 PB-25	         As a user, I want to track my order status.	                                      High	                    Sprint 4
