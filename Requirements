@@ -1,0 +1,25 @@
+User Registration
+User Login & Logout
+Forgot password functionality
+OTP verification
+View/Edit profile
+View order history and total spending on orders from user side
+Each restaurant total orders and money earned (today, month, year, total)
+View restaurant menu
+Filter by (Rating, Price, Veg/Non-Veg)
+Food images
+Description
+Price
+Availability status
+Cart (Add items, Remove items, Update quantity, View total bill, Apply coupons)
+For Placing Order User enters: Delivery address, Payment method
+Restaurant Login: Restaurant owner can login securely
+View new orders
+View ongoing orders
+View completed orders
+View cancelled orders
+Order Management: If restaurant accepts:
+Order status becomes 'Accepted' User receives notification "Restaurant has accepted your order"
+When a customer places an order: Restaurant receives (Customer details, Ordered items, Quantity, Total amount, Delivery address, Payment mode (COD, UPI))
+Reject Order: Order status becomes 'Cancelled' User receives notification "Your order has been cancelled by the restaurant"
+Status changes: (Picked Up or Out for Delivery or Delivered)
