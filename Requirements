@@ -11,7 +11,7 @@ Food images
 Description
 Price
 Availability status
-Cart (Add items, Remove items, Update quantity, View total bill, Apply coupons)
+Cart (Add items, Remove items, Update quantity, price for each item, View total bill, Apply coupons)
 For Placing Order User enters: Delivery address, Payment method
 Restaurant Login: Restaurant owner can login securely
 View new orders
