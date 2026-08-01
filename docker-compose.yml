@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  # 1. MySQL Database Service
+  mysql:
+    image: mysql:8.0
+    container_name: mysql_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql # Persists data even if the container stops
+
+  # 2. Node.js Application Service
+  app:
+    build: .
+    container_name: node_app
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - DB_HOST=mysql # Matches the service name above
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - SELENIUM_HUB_URL=http://selenium-hub:4444/wd/hub
+    depends_on:
+      - mysql
+      - selenium-hub
+
+  # 3. Selenium Hub (Coordinates the browser nodes)
+  selenium-hub:
+    image: selenium/hub:4.22.0
+    container_name: selenium-hub
+    ports:
+      - "4444:4444"
+
+  # 4. Selenium Chrome Node
+  chrome:
+    image: selenium/node-chrome:4.22.0
+    depends_on:
+      - selenium-hub
+    environment:
+      - SE_EVENT_BUS_HOST=selenium-hub
+      - SE_EVENT_BUS_PUBLISH_PORT=4442
+      - SE_EVENT_BUS_SUBSCRIBE_PORT=4443
+    shm_size: "2gb" # Prevents browser crashes
+
+volumes:
+  mysql_data:
