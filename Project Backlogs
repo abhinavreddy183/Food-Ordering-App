@@ -1,0 +1,113 @@
+Product Backlog – Food Ordering App
+
+
+
+Backlog ID	     User Story / Requirement	                               Priority	           Sprint
+
+PB-01	           Gather requirements from stakeholders and clients	       High	               Sprint 1
+PB-02	           Create Software Requirements Specification (SRS)	       High	               Sprint 1
+PB-03            Design system architecture	                             High	               Sprint 1
+PB-04	           Design database schema	                                 High	               Sprint 1
+PB-09	           Set up GitHub repository and branching strategy	       Medium	             Sprint 1
+PB-10	           Configure Jenkins CI pipeline for automated builds	     High                Sprint 1
+
+
+Sprint 2 – Development Environment & Authentication
+
+Backlog ID	     User Story / Requirement	                               Priority
+
+PB-11	           Create Docker environment for application deployment	   High
+PB-05	           User Registration	                                     High
+PB-06	           User Login	                                             High
+PB-07	           Password Reset	                                         Medium
+PB-08	           Admin Manage User Accounts	                             Medium
+
+
+Sprint 3 – Restaurant & Menu Management
+
+Backlog ID	     User Story / Requirement	                               Priority
+
+PB-12	           View Restaurant List	                                   High
+PB-13	           Search Restaurants	                                     Medium
+PB-14	           View Restaurant Menus	                                 High
+PB-15	           Admin Manage Menu Items	                               Medium
+PB-16	           View Food Item Details and Prices	                     High
+
+
+Sprint 4 – Cart & Order Processing
+
+Backlog ID	     User Story / Requirement	                               Priority
+
+PB-17	           Add Food Items to Cart	                                 High
+PB-18	           Update Cart Quantities	                                 High
+PB-19	           Remove Items from Cart	                                 High
+PB-20	           Place Order	                                           High
+PB-21	           View Order History	                                     Medium
+PB-22	           Restaurant Admin Receive Orders	                       High
+
+
+Sprint 5 – Payment & Order Tracking
+
+Backlog ID	     User Story / Requirement	                               Priority
+
+PB-23	           Online Payment Integration	                             High
+PB-24	           Order Confirmation Notifications	                       Medium
+PB-25	           Track Order Status	                                     High
+PB-26	           System Integration Testing	                             High
+
+
+Sprint 6 – Deployment & Project Closure
+
+Backlog ID	     User Story / Requirement	                               Priority
+
+PB-27	           Containerize Application Using Docker	                 High
+PB-28	           Deploy Application to Production Environment	           High
+PB-29	           Monitor Application Health and Logs	                   Medium
+PB-30	           Prepare Project Documentation and User Manual	         Medium
+
+Product Backlog Owners
+Backlog ID             	Owner
+PB-01	                  Requirement Analyst
+PB-02	                  Requirement Analyst
+PB-03	                  Designer / System Architect
+PB-04	                  Designer / System Architect
+PB-05	                  Developer 1 & Developer 2
+PB-06	                  Developer 1 & Developer 2
+PB-07	                  Developer 1 & Developer 2
+PB-08	                  Developer 2
+PB-09	                  Developer 1 (GitHub Admin)
+PB-10	                  Developer 2 (Jenkins Admin)
+PB-11	                  Deployment Engineer 1 & Deployment Engineer 2
+PB-12	                  Developer 1 & Developer 2
+PB-13	                  Developer 1 & Developer 2
+PB-14	                  Developer 1 & Developer 2
+PB-15	                  Developer 2
+PB-16	                  Developer 1 & Developer 2
+PB-17	                  Developer 1 & Developer 2
+PB-18	                  Developer 1 & Developer 2
+PB-19	                  Developer 1 & Developer 2
+PB-20	                  Developer 1 & Developer 2
+PB-21	                  Developer 1 & Developer 2
+PB-22	                  Developer 2
+PB-23	                  Developer 2
+PB-24	                  Developer 2
+PB-25	                  Developer 1 & Developer 2
+PB-26	                  Tester
+PB-27	                  Deployment Engineer 1
+PB-28	                  Deployment Engineer 2
+PB-29	                  Deployment Engineer 2
+PB-30	                  Requirement Analyst & Entire Team
+
+
+Prioritized Backlog (Top 10 Items)
+
+User Registration
+User Login
+GitHub Repository Setup
+Jenkins CI Pipeline Setup
+Docker Environment Setup
+Restaurant Listing
+Menu Display
+Add to Cart
+Place Order
+Online Payment Integration
