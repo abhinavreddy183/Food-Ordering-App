@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FoodFlow – System Integration Test Suite</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .test-container {
+      max-width: 1050px;
+      margin: 2.5rem auto;
+      padding: 0 1.5rem;
+    }
+    .test-header-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 2rem;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      margin-bottom: 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .test-item {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.5rem;
+      border: 1px solid var(--border);
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: all 0.2s;
+    }
+    .test-item.passed { border-left: 5px solid var(--success); }
+    .test-item.running { border-left: 5px solid var(--warning); background: #FFFDF8; }
+    .test-item.failed { border-left: 5px solid var(--danger); background: #FEF9F9; }
+  </style>
+</head>
+<body>
+  <div class="test-container">
+    <div class="test-header-card">
+      <div>
+        <h1 style="font-size:1.6rem; font-weight:800; margin-bottom:0.4rem;">🧪 System Integration & End-to-End Test Suite</h1>
+        <p style="color:var(--text-muted); font-size:0.95rem;">Validates real-time customer ordering, payment processing, admin state updates, and database synchronization.</p>
+      </div>
+      <button class="btn-primary" onclick="runAutomatedTests()" style="padding:12px 24px; font-size:1rem;">▶ Run All 14 Tests</button>
+    </div>
+
+    <div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:1.25rem 2rem; margin-bottom:2rem; display:flex; justify-content:space-around; text-align:center;">
+      <div><div style="font-size:1.6rem; font-weight:800;" id="testTotalCount">14</div><div style="font-size:0.78rem; color:var(--text-muted);">Total Test Cases</div></div>
+      <div><div style="font-size:1.6rem; font-weight:800; color:var(--success);" id="testPassCount">0</div><div style="font-size:0.78rem; color:var(--text-muted);">Passed</div></div>
+      <div><div style="font-size:1.6rem; font-weight:800; color:var(--danger);" id="testFailCount">0</div><div style="font-size:0.78rem; color:var(--text-muted);">Failed</div></div>
+      <div><div style="font-size:1.6rem; font-weight:800; color:var(--primary);" id="testStatusLabel">Ready</div><div style="font-size:0.78rem; color:var(--text-muted);">Execution Status</div></div>
+    </div>
+
+    <div id="testList"></div>
+  </div>
+
+  <div class="toast" id="globalToast"></div>
+
+  <script src="store.js"></script>
+  <script src="app.js"></script>
+  <script>
+    const tests = [
+      { id: 1, name: 'Store Initialisation & Seeded Data Verification', run: () => window.FoodFlowStore && window.FoodFlowStore.getRestaurants().length >= 6 && window.FoodFlowStore.getMenuItems().length >= 20 },
+      { id: 2, name: 'Customer User Registration & Strict Validation', run: () => {
+        const testEmail = 'tester_' + Date.now() + '@example.com';
+        const user = window.FoodFlowStore.registerUser({ firstName: 'QA', lastName: 'Tester', email: testEmail, password: 'Password@123', phone: '9888877777' });
+        return user && user.email === testEmail && user.password === 'Password@123';
+      }},
+      { id: 3, name: 'User Authentication & Password Verification', run: () => {
+        const user = window.FoodFlowStore.loginUser('ravi@example.com', 'Password@123');
+        return user && window.FoodFlowStore.getCurrentUser().email === 'ravi@example.com';
+      }},
+      { id: 4, name: 'OTP Generation, Phone/Email Verification & Password Reset', run: () => {
+        const otpEmailRes = window.FoodFlowStore.generatePasswordResetOTP('priya@example.com');
+        const checkEmail = window.FoodFlowStore.verifyPasswordResetOTP('priya@example.com', otpEmailRes.otp);
+        
+        const otpPhoneRes = window.FoodFlowStore.generatePasswordResetOTP('9123456789');
+        const checkPhone = window.FoodFlowStore.verifyPasswordResetOTP('9123456789', otpPhoneRes.otp);
+        
+        window.FoodFlowStore.updateUserPassword('priya@example.com', 'NewPass@2026');
+        const loginCheck = window.FoodFlowStore.loginUser('priya@example.com', 'NewPass@2026');
+        return otpEmailRes.success && checkEmail.valid && otpPhoneRes.success && checkPhone.valid && loginCheck && loginCheck.email === 'priya@example.com';
+      }},
+      { id: 5, name: 'Restaurant Catalog Retrieval & Cuisine Filter', run: () => {
+        const biryanis = window.FoodFlowStore.getRestaurants().filter(r => r.cuisine === 'Biryani');
+        return biryanis.length >= 1 && biryanis[0].name === 'Spice Garden';
+      }},
+      { id: 6, name: 'Menu Retrieval & Item Availability Assertion', run: () => {
+        const menu = window.FoodFlowStore.getMenuItems(1);
+        return menu.length >= 4 && menu.some(i => i.name.includes('Biryani'));
+      }},
+      { id: 7, name: 'Cart Item Insertion & Quantity Recalculation', run: () => {
+        window.FoodFlowStore.clearCart();
+        window.FoodFlowStore.addToCart(101, 2);
+        const cart = window.FoodFlowStore.getCart();
+        return cart.length === 1 && cart[0].qty === 2;
+      }},
+      { id: 8, name: 'Promo Coupon Validation & Math Engine (KBSIRSTUDENT)', run: () => {
+        const res = window.FoodFlowStore.validatePromo('KBSIRSTUDENT', 300);
+        return res.valid && res.discountAmount === 150;
+      }},
+      { id: 9, name: 'Order Placement & Unique ID Generation', run: () => {
+        const order = window.FoodFlowStore.placeOrder({ customer: 'QA Test Order', email: 'qa@foodflow.com', total: 550, paymentMethod: 'UPI' });
+        return order && order.id.startsWith('FF') && order.status === 'pending';
+      }},
+      { id: 10, name: 'Admin Order Reception & Status Progression', run: () => {
+        const orders = window.FoodFlowStore.getOrders();
+        const latest = orders[0];
+        const updated = window.FoodFlowStore.updateOrderStatus(latest.id, 'preparing', 'QA updated status');
+        return updated && updated.status === 'preparing';
+      }},
+      { id: 11, name: 'Admin Menu Item Availability Real-Time Toggle', run: () => {
+        window.FoodFlowStore.toggleMenuItemAvailability(101, false);
+        const disabled = window.FoodFlowStore.getMenuItemById(101);
+        window.FoodFlowStore.toggleMenuItemAvailability(101, true);
+        return disabled.available === false;
+      }},
+      { id: 12, name: 'Admin User Account Suspend & Activate Toggle', run: () => {
+        const suspended = window.FoodFlowStore.toggleUserStatus('U001');
+        const active = window.FoodFlowStore.toggleUserStatus('U001');
+        return suspended.status === 'suspended' && active.status === 'active';
+      }},
+      { id: 13, name: 'Prepaid Order Cancellation & Automated Refund Engine', run: () => {
+        const prepaidOrder = window.FoodFlowStore.placeOrder({
+          customer: 'Prepaid Refund Test',
+          email: 'qa@foodflow.com',
+          total: 450,
+          paymentMethod: 'UPI (Google Pay)'
+        });
+        const cancelRes = window.FoodFlowStore.cancelOrder(prepaidOrder.id, 'Kitchen closed', 'Super Admin');
+        const payments = window.FoodFlowStore.getPayments();
+        const refundTxn = payments.find(p => p.orderId === prepaidOrder.id && p.status === 'refunded');
+        return cancelRes.success && cancelRes.order.refundStatus === 'refunded' && refundTxn && refundTxn.amount === 450;
+      }},
+      { id: 14, name: 'Cash on Delivery (COD) Cancellation (No Refund Needed)', run: () => {
+        const codOrder = window.FoodFlowStore.placeOrder({
+          customer: 'COD Cancel Test',
+          email: 'qa@foodflow.com',
+          total: 300,
+          paymentMethod: 'Cash on Delivery'
+        });
+        const cancelRes = window.FoodFlowStore.cancelOrder(codOrder.id, 'Ordered by mistake', 'Customer');
+        return cancelRes.success && cancelRes.order.refundStatus === 'not_applicable' && cancelRes.refundInfo.isCod === true;
+      }}
+    ];
+
+    function renderTests() {
+      const container = document.getElementById('testList');
+      if (!container) return;
+      container.innerHTML = tests.map(t => `
+        <div class="test-item" id="t-card-${t.id}">
+          <div>
+            <strong style="color:var(--text); font-size:0.98rem;">Test #${t.id}: ${t.name}</strong>
+            <div style="font-size:0.8rem; color:var(--text-muted); margin-top:3px;">Automated system assertion</div>
+          </div>
+          <span class="badge badge-neutral" id="t-badge-${t.id}">Pending</span>
+        </div>
+      `).join('');
+    }
+
+    async function runAutomatedTests() {
+      renderTests();
+      let passed = 0;
+      let failed = 0;
+      const statusLabel = document.getElementById('testStatusLabel');
+      if (statusLabel) statusLabel.textContent = 'Running...';
+
+      for (const t of tests) {
+        const card = document.getElementById(`t-card-${t.id}`);
+        const badge = document.getElementById(`t-badge-${t.id}`);
+        if (card) card.className = 'test-item running';
+        if (badge) { badge.className = 'badge badge-warning'; badge.textContent = 'Testing...'; }
+
+        await new Promise(r => setTimeout(r, 100));
+
+        try {
+          const res = t.run();
+          if (res) {
+            passed++;
+            if (card) card.className = 'test-item passed';
+            if (badge) { badge.className = 'badge badge-success'; badge.textContent = '✓ Passed'; }
+          } else {
+            failed++;
+            if (card) card.className = 'test-item failed';
+            if (badge) { badge.className = 'badge badge-danger'; badge.textContent = '✗ Failed'; }
+          }
+        } catch (err) {
+          failed++;
+          if (card) card.className = 'test-item failed';
+          if (badge) { badge.className = 'badge badge-danger'; badge.textContent = '✗ Error'; }
+        }
+
+        document.getElementById('testPassCount').textContent = passed;
+        document.getElementById('testFailCount').textContent = failed;
+      }
+
+      if (statusLabel) {
+        statusLabel.textContent = failed === 0 ? '100% Passed' : `${passed}/${passed+failed} Passed`;
+        statusLabel.style.color = failed === 0 ? 'var(--success)' : 'var(--danger)';
+      }
+      showToast(`QA Suite: ${passed} Passed, ${failed} Failed`, failed === 0 ? 'success' : 'error');
+    }
+
+    window.runAutomatedTests = runAutomatedTests;
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', renderTests);
+    } else {
+      renderTests();
+    }
+  </script>
+</body>
+</html>

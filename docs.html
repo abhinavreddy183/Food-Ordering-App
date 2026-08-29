@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FoodFlow – System Architecture, SRS & Sprint Backlog Specification</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .docs-container {
+      max-width: 1150px;
+      margin: 2rem auto;
+      padding: 0 1.5rem;
+    }
+    .doc-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 2.2rem;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      margin-bottom: 2rem;
+    }
+    .doc-card h2 {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: var(--text);
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 2px solid var(--primary-light);
+    }
+    .doc-card h3 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin: 1.5rem 0 0.75rem;
+      color: var(--secondary);
+    }
+    .spec-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      margin-top: 1rem;
+    }
+    .spec-table th {
+      background: var(--surface2);
+      text-align: left;
+      padding: 10px 14px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1.5px solid var(--border);
+    }
+    .spec-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    .diagram-box {
+      background: #0F1117;
+      border-radius: 10px;
+      padding: 1.5rem;
+      color: #79c0ff;
+      font-family: var(--code-font);
+      font-size: 0.85rem;
+      line-height: 1.5;
+      overflow-x: auto;
+      margin: 1rem 0;
+    }
+    .sql-box {
+      background: #1A1A2E;
+      border-radius: 8px;
+      padding: 1.25rem;
+      color: #A5D6FF;
+      font-family: var(--code-font);
+      font-size: 0.82rem;
+      line-height: 1.5;
+      overflow-x: auto;
+      margin: 1rem 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="docs-container">
+    <!-- PRODUCT BACKLOG -->
+    <div class="doc-card">
+      <h2>📋 Product Backlog Specification (PB-01 to PB-30)</h2>
+      <p style="color:var(--text-muted); line-height:1.6;">
+        FoodFlow development was organized into 6 agile sprints addressing stakeholder requirements, authentication, restaurant management, cart and order lifecycle, Swiggy/Zomato payment gateway, refunds, and containerized deployment.
+      </p>
+
+      <table class="spec-table">
+        <thead>
+          <tr>
+            <th>Backlog ID</th>
+            <th>Sprint</th>
+            <th>Requirement / User Story</th>
+            <th>Priority</th>
+            <th>Implementation Deliverable</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>PB-01</strong></td><td>Sprint 1</td><td>Gather requirements from stakeholders and clients</td><td><span class="badge badge-danger">High</span></td><td>Functional specifications & user personas</td></tr>
+          <tr><td><strong>PB-02</strong></td><td>Sprint 1</td><td>Create Software Requirements Specification (SRS)</td><td><span class="badge badge-danger">High</span></td><td>SRS document with functional & non-functional requirements</td></tr>
+          <tr><td><strong>PB-03</strong></td><td>Sprint 1</td><td>Design system architecture</td><td><span class="badge badge-danger">High</span></td><td>Dual-portal event-driven architecture model</td></tr>
+          <tr><td><strong>PB-04</strong></td><td>Sprint 1</td><td>Design database schema</td><td><span class="badge badge-danger">High</span></td><td>Relational ER schema (Users, Restaurants, Items, Orders, Payments)</td></tr>
+          <tr><td><strong>PB-09</strong></td><td>Sprint 1</td><td>Set up GitHub repository and branching strategy</td><td><span class="badge badge-warning">Medium</span></td><td>Main/Dev/Feature branching workflow documented</td></tr>
+          <tr><td><strong>PB-10</strong></td><td>Sprint 1</td><td>Configure Jenkins CI pipeline for automated builds</td><td><span class="badge badge-danger">High</span></td><td>Declarative Jenkinsfile with automated test & build stages</td></tr>
+          <tr><td><strong>PB-11</strong></td><td>Sprint 2</td><td>Create Docker environment for application deployment</td><td><span class="badge badge-danger">High</span></td><td>Multi-stage Dockerfile and docker-compose.yml</td></tr>
+          <tr><td><strong>PB-05</strong></td><td>Sprint 2</td><td>User Registration</td><td><span class="badge badge-danger">High</span></td><td>Customer registration form with email/phone validation</td></tr>
+          <tr><td><strong>PB-06</strong></td><td>Sprint 2</td><td>User Login</td><td><span class="badge badge-danger">High</span></td><td>Role-based authentication guard and demo switchers</td></tr>
+          <tr><td><strong>PB-07</strong></td><td>Sprint 2</td><td>Password Reset</td><td><span class="badge badge-warning">Medium</span></td><td>Password recovery flow with verification code simulation</td></tr>
+          <tr><td><strong>PB-08</strong></td><td>Sprint 2</td><td>Admin Manage User Accounts</td><td><span class="badge badge-warning">Medium</span></td><td>User directory with suspend/activate toggle & create modal</td></tr>
+          <tr><td><strong>PB-12</strong></td><td>Sprint 3</td><td>View Restaurant List</td><td><span class="badge badge-danger">High</span></td><td>Responsive restaurant grid with ratings, delivery fees & tags</td></tr>
+          <tr><td><strong>PB-13</strong></td><td>Sprint 3</td><td>Search Restaurants</td><td><span class="badge badge-warning">Medium</span></td><td>Live search by name, description & cuisine filter pills</td></tr>
+          <tr><td><strong>PB-14</strong></td><td>Sprint 3</td><td>View Restaurant Menus</td><td><span class="badge badge-danger">High</span></td><td>Categorized menu layout with instant section jump navigation</td></tr>
+          <tr><td><strong>PB-15</strong></td><td>Sprint 3</td><td>Admin Manage Menu Items</td><td><span class="badge badge-warning">Medium</span></td><td>Admin add/edit/delete items & live availability toggle switch</td></tr>
+          <tr><td><strong>PB-16</strong></td><td>Sprint 3</td><td>View Food Item Details and Prices</td><td><span class="badge badge-danger">High</span></td><td>Dishes with descriptions, emojis, prices & Veg/Spicy badges</td></tr>
+          <tr><td><strong>PB-17</strong></td><td>Sprint 4</td><td>Add Food Items to Cart</td><td><span class="badge badge-danger">High</span></td><td>Single-click item addition with badge count update</td></tr>
+          <tr><td><strong>PB-18</strong></td><td>Sprint 4</td><td>Update Cart Quantities</td><td><span class="badge badge-danger">High</span></td><td>+/- quantity controls with instantaneous price recalculation</td></tr>
+          <tr><td><strong>PB-19</strong></td><td>Sprint 4</td><td>Remove Items from Cart</td><td><span class="badge badge-danger">High</span></td><td>Zero-quantity deletion and cart clearing</td></tr>
+          <tr><td><strong>PB-20</strong></td><td>Sprint 4</td><td>Place Order</td><td><span class="badge badge-danger">High</span></td><td>Checkout form with address validation and notes</td></tr>
+          <tr><td><strong>PB-21</strong></td><td>Sprint 4</td><td>View Order History</td><td><span class="badge badge-warning">Medium</span></td><td>Customer profile order cards with status badges & reorder button</td></tr>
+          <tr><td><strong>PB-22</strong></td><td>Sprint 4</td><td>Restaurant Admin Receive Orders</td><td><span class="badge badge-danger">High</span></td><td>Admin incoming order queue and live status updater modal</td></tr>
+          <tr><td><strong>PB-23</strong></td><td>Sprint 5</td><td>Online Payment Integration</td><td><span class="badge badge-danger">High</span></td><td>UPI, Credit Card, Net Banking, COD & transaction logging</td></tr>
+          <tr><td><strong>PB-24</strong></td><td>Sprint 5</td><td>Order Confirmation Notifications</td><td><span class="badge badge-warning">Medium</span></td><td>Interactive celebration toast and printable tax invoice receipt</td></tr>
+          <tr><td><strong>PB-25</strong></td><td>Sprint 5</td><td>Track Order Status</td><td><span class="badge badge-danger">High</span></td><td>Live animated tracker synchronized with Admin status updates</td></tr>
+          <tr><td><strong>PB-26</strong></td><td>Sprint 5</td><td>System Integration Testing</td><td><span class="badge badge-danger">High</span></td><td>Automated 14-case end-to-end integration test runner</td></tr>
+          <tr><td><strong>PB-27</strong></td><td>Sprint 6</td><td>Containerize Application Using Docker</td><td><span class="badge badge-danger">High</span></td><td>Production-ready Docker container with healthcheck</td></tr>
+          <tr><td><strong>PB-28</strong></td><td>Sprint 6</td><td>Deploy Application to Production Environment</td><td><span class="badge badge-danger">High</span></td><td>Production build and deployment guide</td></tr>
+          <tr><td><strong>PB-29</strong></td><td>Sprint 6</td><td>Monitor Application Health and Logs</td><td><span class="badge badge-warning">Medium</span></td><td>Live system metrics (CPU, DB, Docker, Jenkins) & streaming terminal</td></tr>
+          <tr><td><strong>PB-30</strong></td><td>Sprint 6</td><td>Prepare Project Documentation and User Manual</td><td><span class="badge badge-warning">Medium</span></td><td>Comprehensive interactive docs & README guide</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- SYSTEM ARCHITECTURE (PB-03) -->
+    <div class="doc-card">
+      <h2>🏛️ System Architecture & Data Flow (PB-03)</h2>
+      <p style="color:var(--text-muted);">
+        The platform utilizes a dual-portal architecture with a centralized reactive state store and MySQL database backend.
+      </p>
+
+      <div class="diagram-box">
++-----------------------------------------------------------------------------------+
+|                                 CLIENT BROWSERS                                   |
+|                                                                                   |
+|  +-------------------------------------+   +------------------------------------+  |
+|  |       CUSTOMER PORTAL               |   |        ADMIN MANAGEMENT PANEL      |  |
+|  |  - Restaurant Search (PB-13)        |   |  - Live Dashboard (PB-29)          |  |
+|  |  - Categorized Menus (PB-14)        |   |  - Order Status Updater (PB-22)    |  |
+|  |  - Cart & Checkout (PB-17..20)      |   |  - Menu Management (PB-15)         |  |
+|  |  - Live Order Tracker (PB-25)       |   |  - User Directory (PB-08)          |  |
+|  |  - Order History (PB-21)            |   |  - Payment Transaction Log (PB-23) |  |
+|  +------------------+------------------+   +------------------+-----------------+  |
+|                     |                                         |                   |
+|                     +--------------------+--------------------+                   |
+|                                          |                                        |
+|                                          v                                        |
+|                     +-----------------------------------------+                   |
+|                     |     CENTRAL REACTIVE STATE STORE        |                   |
+|                     |      (window.FoodFlowStore)             |                   |
+|                     |  - Orders, Users, Restaurants, Menu     |                   |
+|                     |  - Payments, Promos, Settings, Logs     |                   |
+|                     +--------------------+--------------------+                   |
+|                                          |                                        |
+|                                          v                                        |
+|                     +-----------------------------------------+                   |
+|                     |       MYSQL DATABASE & REST API         |                   |
+|                     |  (foodflow_db via Express Backend)      |                   |
+|                     +-----------------------------------------+                   |
++-----------------------------------------------------------------------------------+
+      </div>
+    </div>
+
+    <!-- DATABASE SCHEMA (PB-04) -->
+    <div class="doc-card">
+      <h2>💾 Relational Database Schema Design (PB-04)</h2>
+      <p style="color:var(--text-muted);">
+        The relational schema is structured with third normal form (3NF) compliance, supporting customer accounts, restaurant profiles, menu categories, dynamic pricing, and transactional order histories.
+      </p>
+
+      <div class="sql-box">
+-- Database Schema DDL (MySQL 8.0 / Workbench)
+CREATE TABLE users (
+  id VARCHAR(50) PRIMARY KEY,
+  name VARCHAR(200) NOT NULL,
+  email VARCHAR(255) UNIQUE NOT NULL,
+  password VARCHAR(255) NOT NULL,
+  phone VARCHAR(30),
+  role ENUM('Customer', 'Restaurant Admin', 'Delivery Agent', 'Super Admin') DEFAULT 'Customer',
+  status ENUM('active', 'suspended') DEFAULT 'active',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE restaurants (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(200) NOT NULL,
+  image VARCHAR(500),
+  cuisine VARCHAR(100) NOT NULL,
+  rating DECIMAL(3,1) DEFAULT 4.5,
+  delivery_time VARCHAR(50) DEFAULT '25–35 mins',
+  delivery_fee DECIMAL(8,2) DEFAULT 30.00,
+  status ENUM('active', 'inactive') DEFAULT 'active'
+);
+
+CREATE TABLE menu_items (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  restaurant_id INT NOT NULL,
+  name VARCHAR(200) NOT NULL,
+  category VARCHAR(100) NOT NULL,
+  description TEXT,
+  price DECIMAL(10,2) NOT NULL,
+  image VARCHAR(500),
+  is_veg BOOLEAN DEFAULT FALSE,
+  available BOOLEAN DEFAULT TRUE,
+  FOREIGN KEY (restaurant_id) REFERENCES restaurants(id) ON DELETE CASCADE
+);
+
+CREATE TABLE orders (
+  id VARCHAR(50) PRIMARY KEY,
+  customer_name VARCHAR(200) NOT NULL,
+  email VARCHAR(255) NOT NULL,
+  restaurant_name VARCHAR(200) NOT NULL,
+  subtotal DECIMAL(10,2) NOT NULL,
+  delivery_fee DECIMAL(10,2) NOT NULL,
+  platform_fee DECIMAL(10,2) DEFAULT 5.00,
+  discount DECIMAL(10,2) DEFAULT 0.00,
+  total DECIMAL(10,2) NOT NULL,
+  status ENUM('pending', 'preparing', 'on-the-way', 'delivered', 'cancelled') DEFAULT 'pending',
+  cancel_reason TEXT,
+  cancelled_by ENUM('Customer', 'Admin', 'Restaurant', 'System'),
+  refund_status ENUM('none', 'refunded', 'pending', 'not_applicable') DEFAULT 'none',
+  refund_amount DECIMAL(10,2) DEFAULT 0.00,
+  refund_ref VARCHAR(100),
+  payment_method VARCHAR(50) NOT NULL,
+  payment_status ENUM('success', 'pending', 'failed', 'refunded') DEFAULT 'success',
+  delivery_address TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+      </div>
+    </div>
+  </div>
+
+  <footer class="global-footer">
+    <strong>FoodFlow</strong> — Documentation & Architectural Reference (PB-01 to PB-30)<br>
+    <span style="font-size:0.78rem; margin-top:4px; display:block;">Sprint 1–6 Agile Delivery Specification</span>
+  </footer>
+</body>
+</html>

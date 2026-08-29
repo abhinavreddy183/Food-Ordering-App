@@ -1,0 +1,55 @@
+version: '3.8'
+
+# ═══════════════════════════════════════════════════════════════
+# FoodFlow - Multi-Service Docker Compose (PB-27, PB-28)
+# ═══════════════════════════════════════════════════════════════
+
+services:
+  # FoodFlow Web Application Frontend & Admin Container
+  foodflow-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: foodflow-web-prod
+    restart: always
+    ports:
+      - "5000:5000"
+    
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - APP_NAME=FoodFlow
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - foodflow-network
+
+  # MySQL Relational Database Service (PB-04, PB-28)
+  foodflow-db:
+    image: mysql:8.0
+    container_name: foodflow-db-prod
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword123
+      MYSQL_DATABASE: foodflow_db
+      MYSQL_USER: foodflow_user
+      MYSQL_PASSWORD: userpassword123
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    networks:
+      - foodflow-network
+
+networks:
+  foodflow-network:
+    driver: bridge
+
+volumes:
+  db_data:
