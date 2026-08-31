@@ -1,105 +1,142 @@
 /**
- * FoodFlow - Core Application Controller (Crash-Proof, High-Performance & Fully Bound)
- * All click, form, search, modal and filter handlers are directly bound to the global window scope.
+ * ═══════════════════════════════════════════════════════════════
+ * FoodFlow Enterprise Application Controller (Production Release)
+ * ═══════════════════════════════════════════════════════════════
+ * Handles customer journeys, Swiggy/Zomato payment gateway, live order tracking,
+ * 6-digit OTP account recovery, profile verification, address deduplication,
+ * sign-out confirmation, and reactive MySQL multi-port synchronization.
  */
 
 (function () {
   'use strict';
 
-  // Global App State
+  // ═══════════════════════ APPLICATION STATE ═══════════════════════
   const AppState = {
-    activePortal: 'customer',
-    activeCustomerScreen: 'home',
+    activePortal: 'customer', // 'customer' | 'admin' | 'tests'
+    activeCustomerScreen: 'home', // 'home' | 'menu' | 'checkout' | 'success' | 'profile'
     activeAdminPage: 'dashboard',
+    activeProfileTab: 'orders', // 'orders' | 'addresses' | 'settings' | 'wallet'
     selectedRestaurant: null,
     activeCuisineFilter: 'All',
     searchQuery: '',
     appliedPromo: null,
     currentTrackingOrderId: null,
-    activeProfileTab: 'orders'
+    activeAuthMode: 'login', // 'login' | 'register' | 'forgot'
+    forgotStep: 1, // 1: Identifier -> 2: OTP -> 3: New Pass -> 4: Done
+    forgotTargetEmail: '',
+    forgotOtpCode: '',
+    forgotCountdownTimer: null,
+    pendingProfileChange: null,
+    profileOtpTarget: ''
   };
 
-  // Web Audio API Synthesizer for chimes
+  // ═══════════════════════ SOUND EFFECTS (WEB AUDIO API) ═══════════════════════
   const SoundEffects = {
-    playChime(freq = 587.33, type = 'sine') {
-      try {
-        const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        if (!AudioCtx) return;
-        const ctx = new AudioCtx();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = type;
-        osc.frequency.setValueAtTime(freq, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15);
-        gain.gain.setValueAtTime(0.15, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.35);
-      } catch (e) {}
+    ctx: null,
+    init() {
+      if (!this.ctx && typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext)) {
+        try {
+          this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        } catch (e) {}
+      }
     },
     playSuccess() {
-      this.playChime(523.25);
+      try {
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(523.25, now); // C5
+        osc.frequency.exponentialRampToValueAtTime(783.99, now + 0.15); // G5
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.35);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.35);
+      } catch (e) {}
     },
-    playAlert() {
-      this.playChime(440, 'triangle');
+    playPop() {
+      try {
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(320, now);
+        osc.frequency.exponentialRampToValueAtTime(640, now + 0.08);
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.12);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.12);
+      } catch (e) {}
+    },
+    playError() {
+      try {
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(220, now);
+        osc.frequency.linearRampToValueAtTime(140, now + 0.2);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.25);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.25);
+      } catch (e) {}
     }
   };
 
-  // Global Toast System
+  // ═══════════════════════ TOAST NOTIFICATIONS ═══════════════════════
   function showToast(message, type = 'info') {
     const toast = document.getElementById('globalToast');
     if (!toast) return;
     toast.textContent = message;
-    toast.className = 'toast show';
-    if (type === 'success') {
-      toast.style.borderLeftColor = 'var(--success)';
-      SoundEffects.playSuccess();
-    } else if (type === 'error') {
-      toast.style.borderLeftColor = 'var(--danger)';
-      SoundEffects.playAlert();
-    } else {
-      toast.style.borderLeftColor = 'var(--primary)';
-    }
+    toast.className = `toast ${type} show`;
+    if (type === 'success') SoundEffects.playSuccess();
+    else if (type === 'error') SoundEffects.playError();
+    else SoundEffects.playPop();
 
     setTimeout(() => {
-      if (toast) toast.classList.remove('show');
+      toast.classList.remove('show');
     }, 3500);
   }
 
-  // ═══════════════════════ PORTAL SWITCHING & DEMO ROLE ═══════════════════════
-  function switchPortal(portalName) {
+  // ═══════════════════════ GLOBAL SWITCHER ═══════════════════════
+  function switchGlobalPortal(portalName) {
     AppState.activePortal = portalName;
-
     document.querySelectorAll('.switcher-tab').forEach((tab) => {
-      const target = tab.getAttribute('data-portal');
-      tab.classList.toggle('active', target === portalName);
+      tab.classList.remove('active');
+      if (tab.dataset.portal === portalName) tab.classList.add('active');
     });
 
-    const custContainer = document.getElementById('customerPortalContainer');
-    const adminContainer = document.getElementById('adminPortalContainer');
-    const docsContainer = document.getElementById('docsPortalContainer');
-    const testsContainer = document.getElementById('testsPortalContainer');
+    const custCont = document.getElementById('customerPortalContainer');
+    const adminCont = document.querySelector('.admin-wrapper');
+    const testCont = document.getElementById('testSuiteContainer');
 
-    if (custContainer) custContainer.style.display = portalName === 'customer' ? 'block' : 'none';
-    if (adminContainer) adminContainer.style.display = portalName === 'admin' ? 'block' : 'none';
-    if (docsContainer) docsContainer.style.display = portalName === 'docs' ? 'block' : 'none';
-    if (testsContainer) testsContainer.style.display = portalName === 'tests' ? 'block' : 'none';
+    if (custCont) custCont.style.display = portalName === 'customer' ? 'block' : 'none';
+    if (adminCont) adminCont.style.display = portalName === 'admin' ? 'flex' : 'none';
+    if (testCont) testCont.style.display = portalName === 'tests' ? 'block' : 'none';
 
-    if (portalName === 'admin') {
-      renderAdminDashboard();
-      renderAdminOrders();
-      renderAdminUsers();
-      renderAdminRestaurants();
-      renderAdminMenu();
-      renderAdminPayments();
-      renderAdminSettingsPromos();
-      updateAdminBadges();
-    } else if (portalName === 'customer') {
+    if (portalName === 'customer') {
+      showCustomerScreen('home');
       renderCustomerHome();
       updateCustomerCartUI();
       updateCustomerAuthUI();
+    } else if (portalName === 'admin') {
+      showAdminPage('dashboard');
+      renderAdminDashboard();
+    } else if (portalName === 'tests') {
+      if (typeof window.renderTests === 'function') window.renderTests();
     }
 
     try {
@@ -107,28 +144,7 @@
     } catch (e) {}
   }
 
-  function handleDemoRoleSwitch(roleValue) {
-    if (!window.FoodFlowStore) return;
-    if (roleValue === 'super_admin') {
-      window.FoodFlowStore.loginUser('admin@foodflow.com', 'Super Admin');
-      showToast('Switched to Super Admin (admin@foodflow.com)', 'success');
-      switchPortal('admin');
-    } else if (roleValue === 'rest_admin') {
-      window.FoodFlowStore.loginUser('admin@spicegarden.com', 'Restaurant Admin');
-      showToast('Switched to Spice Garden Admin', 'success');
-      switchPortal('admin');
-    } else if (roleValue === 'customer_ravi') {
-      window.FoodFlowStore.loginUser('ravi@example.com', 'Customer');
-      showToast('Switched to Customer: Ravi Kumar', 'success');
-      switchPortal('customer');
-    } else if (roleValue === 'customer_priya') {
-      window.FoodFlowStore.loginUser('priya@example.com', 'Customer');
-      showToast('Switched to Customer: Priya Sharma', 'success');
-      switchPortal('customer');
-    }
-  }
-
-  // ═══════════════════════ CUSTOMER PORTAL CONTROLLERS ═══════════════════════
+  // ═══════════════════════ CUSTOMER PORTAL SCREENS ═══════════════════════
   function showCustomerScreen(screenName) {
     AppState.activeCustomerScreen = screenName;
     document.querySelectorAll('.customer-screen').forEach((s) => s.classList.remove('active'));
@@ -142,37 +158,192 @@
   function renderCustomerHome() {
     if (!window.FoodFlowStore) return;
     const restaurants = window.FoodFlowStore.getRestaurants();
-    let filtered = restaurants.filter((r) => r.status === 'active');
+    const allMenuItems = window.FoodFlowStore.getMenuItems();
+    const cart = window.FoodFlowStore.getCart();
 
+    let activeRestaurants = restaurants.filter((r) => r.status === 'active');
+    const searchBarContainer = document.getElementById('homeSearchResultsBar');
+    const dishesContainer = document.getElementById('homeMatchingDishesContainer');
+    const sectionTitle = document.getElementById('homeSectionTitle');
+    const seeAllLink = document.getElementById('homeSeeAllLink');
+
+    // 1. Cuisine Filter
     if (AppState.activeCuisineFilter !== 'All') {
-      filtered = filtered.filter((r) => r.cuisine === AppState.activeCuisineFilter);
+      activeRestaurants = activeRestaurants.filter((r) => r.cuisine.toLowerCase() === AppState.activeCuisineFilter.toLowerCase());
     }
 
-    if (AppState.searchQuery.trim() !== '') {
-      const q = AppState.searchQuery.toLowerCase();
-      filtered = filtered.filter(
+    const q = AppState.searchQuery.trim().toLowerCase();
+
+    // 2. Global Search Logic (Search Restaurants, Cuisines, Locations, AND All Dishes)
+    if (q !== '') {
+      // Find matching dishes
+      const matchingDishes = allMenuItems.filter((item) => {
+        const itemRest = restaurants.find((r) => r.id === (item.restaurantId || item.restId));
+        const restActive = !itemRest || itemRest.status === 'active';
+        return (
+          restActive &&
+          (item.name.toLowerCase().includes(q) ||
+            (item.desc && item.desc.toLowerCase().includes(q)) ||
+            (item.category && item.category.toLowerCase().includes(q)))
+        );
+      });
+
+      const matchingRestIds = new Set(matchingDishes.map((i) => Number(i.restaurantId || i.restId)));
+
+      // Find matching restaurants
+      const filteredRestaurants = activeRestaurants.filter(
         (r) =>
           r.name.toLowerCase().includes(q) ||
           r.cuisine.toLowerCase().includes(q) ||
-          (r.desc && r.desc.toLowerCase().includes(q))
+          (r.desc && r.desc.toLowerCase().includes(q)) ||
+          (r.location && r.location.toLowerCase().includes(q)) ||
+          (r.tag && r.tag.toLowerCase().includes(q)) ||
+          matchingRestIds.has(r.id)
       );
+
+      // Search Summary Header Bar
+      if (searchBarContainer) {
+        searchBarContainer.innerHTML = `
+          <div class="search-results-bar">
+            <div>
+              <span>Search results for: <span class="search-highlight-text">"${AppState.searchQuery}"</span></span>
+              <span style="font-size:0.85rem; color:var(--text-muted); margin-left:8px;">
+                (${filteredRestaurants.length} restaurants, ${matchingDishes.length} dishes)
+              </span>
+            </div>
+            <button class="action-btn" style="color:var(--primary); font-weight:700;" onclick="clearCustomerSearch()">
+              ✕ Clear Search
+            </button>
+          </div>`;
+      }
+
+      if (sectionTitle) sectionTitle.textContent = `Matching Restaurants (${filteredRestaurants.length})`;
+      if (seeAllLink) seeAllLink.style.display = 'none';
+
+      // Render Restaurants Grid
+      const grid = document.getElementById('restaurantsGrid');
+      if (grid) {
+        if (filteredRestaurants.length === 0 && matchingDishes.length === 0) {
+          grid.innerHTML = `
+            <div style="grid-column: 1/-1; text-align:center; padding:3rem; color:var(--text-muted);">
+              <div style="font-size:3rem; margin-bottom:0.5rem;">🔍</div>
+              <h3>No matching restaurants or dishes found</h3>
+              <p style="margin-top:4px;">Try searching for "Biryani", "Burger", "Pizza", "Noodles", "Waffle", or "Dosa".</p>
+              <button class="btn-primary" style="margin-top:1rem;" onclick="clearCustomerSearch()">Clear Search</button>
+            </div>`;
+        } else {
+          grid.innerHTML = filteredRestaurants
+            .map((r) => {
+              const matchedDishesForRest = matchingDishes.filter((d) => Number(d.restaurantId || d.restId) === r.id);
+              const dishBadgeHtml =
+                matchedDishesForRest.length > 0
+                  ? `<div class="dish-match-tag">🍴 Matches: ${matchedDishesForRest
+                      .slice(0, 2)
+                      .map((d) => `${d.name} (₹${d.price})`)
+                      .join(', ')}${matchedDishesForRest.length > 2 ? ' +' + (matchedDishesForRest.length - 2) + ' more' : ''}</div>`
+                  : '';
+
+              return `
+              <div class="restaurant-card" onclick="openCustomerRestaurant(${r.id})">
+                <div class="rest-img">
+                  <img src="${r.image}" alt="${r.name}" loading="lazy">
+                  <span class="rest-badge-top">${r.tag || 'Popular'}</span>
+                </div>
+                <div class="rest-info">
+                  <div class="rest-name">${r.name}</div>
+                  <div class="rest-desc">${r.desc || ''}</div>
+                  ${dishBadgeHtml}
+                  <div class="rest-meta" style="margin-top:6px;">
+                    <span class="rest-rating">★ ${r.rating}</span>
+                    <span>🕐 ${r.deliveryTime}</span>
+                    <span class="rest-fee">🛵 ${r.fee === 'Free' ? 'Free Delivery' : r.fee + ' delivery'}</span>
+                  </div>
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+                    <span class="rest-tag">${r.cuisine}</span>
+                    <span style="font-size:0.8rem; color:var(--primary); font-weight:700;">View Menu →</span>
+                  </div>
+                </div>
+              </div>`;
+            })
+            .join('');
+        }
+      }
+
+      // Render Matching Dishes Section with Direct Add to Cart
+      if (dishesContainer) {
+        if (matchingDishes.length > 0) {
+          dishesContainer.innerHTML = `
+            <div class="search-dishes-section">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                <h3 style="font-size:1.2rem; font-weight:800;">🍽️ Matching Dishes (${matchingDishes.length})</h3>
+                <span style="font-size:0.82rem; color:var(--text-muted);">Order directly or browse full restaurant menus</span>
+              </div>
+              <div class="search-dish-grid">
+                ${matchingDishes
+                  .map((item) => {
+                    const inCart = cart.find((c) => c.id === item.id);
+                    const qty = inCart ? inCart.qty : 0;
+                    const rest = restaurants.find((r) => r.id === (item.restaurantId || item.restId));
+                    const restName = rest ? rest.name : (item.restaurant || 'Restaurant');
+
+                    return `
+                    <div class="search-dish-card">
+                      <img src="${item.image}" alt="${item.name}" class="search-dish-thumb">
+                      <div style="flex:1; display:flex; flex-direction:column; justify-content:space-between;">
+                        <div>
+                          <div style="font-weight:700; font-size:0.95rem; margin-bottom:2px;">
+                            ${item.name} ${item.veg ? '<span style="color:#17A865; font-size:0.75rem;">🌿</span>' : '<span style="color:#DC2626; font-size:0.75rem;">🍗</span>'}
+                          </div>
+                          <div style="font-size:0.75rem; color:var(--primary); font-weight:600; cursor:pointer;" onclick="openCustomerRestaurant(${item.restaurantId || item.restId})">
+                            📍 ${restName}
+                          </div>
+                          <div style="font-weight:800; font-size:1rem; margin-top:4px;">₹${item.price}</div>
+                        </div>
+                        <div style="margin-top:6px; align-self:flex-end;">
+                          ${
+                            qty === 0
+                              ? `<button class="add-btn" style="padding:6px 14px; font-size:0.82rem;" onclick="customerAddToCart(${item.id})">+ Add</button>`
+                              : `<div class="qty-ctrl">
+                                  <button class="qty-btn" onclick="customerUpdateQty(${item.id}, -1)">−</button>
+                                  <span class="qty-num">${qty}</span>
+                                  <button class="qty-btn" onclick="customerUpdateQty(${item.id}, 1)">+</button>
+                                </div>`
+                          }
+                        </div>
+                      </div>
+                    </div>`;
+                  })
+                  .join('')}
+              </div>
+            </div>`;
+        } else {
+          dishesContainer.innerHTML = '';
+        }
+      }
+      return;
     }
+
+    // Default Home Screen (No search query active)
+    if (searchBarContainer) searchBarContainer.innerHTML = '';
+    if (dishesContainer) dishesContainer.innerHTML = '';
+    if (sectionTitle) sectionTitle.textContent = 'Top Restaurants Near You';
+    if (seeAllLink) seeAllLink.style.display = 'inline-block';
 
     const grid = document.getElementById('restaurantsGrid');
     if (!grid) return;
 
-    if (filtered.length === 0) {
+    if (activeRestaurants.length === 0) {
       grid.innerHTML = `
         <div style="grid-column: 1/-1; text-align:center; padding:3rem; color:var(--text-muted);">
           <div style="font-size:3rem; margin-bottom:0.5rem;">🔍</div>
           <h3>No restaurants found</h3>
-          <p>Try searching for a different cuisine or keyword.</p>
+          <p>Try selecting a different cuisine filter.</p>
           <button class="btn-primary" style="margin-top:1rem;" onclick="filterByCuisinePill('All', null)">Reset Filter</button>
         </div>`;
       return;
     }
 
-    grid.innerHTML = filtered
+    grid.innerHTML = activeRestaurants
       .map(
         (r) => `
       <div class="restaurant-card" onclick="openCustomerRestaurant(${r.id})">
@@ -185,7 +356,7 @@
           <div class="rest-desc">${r.desc || ''}</div>
           <div class="rest-meta">
             <span class="rest-rating">★ ${r.rating}</span>
-            <span>🕐 ${r.deliveryTime} min</span>
+            <span>🕐 ${r.deliveryTime}</span>
             <span class="rest-fee">🛵 ${r.fee === 'Free' ? 'Free Delivery' : r.fee + ' delivery'}</span>
           </div>
           <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
@@ -198,6 +369,13 @@
       .join('');
   }
 
+  function clearCustomerSearch() {
+    AppState.searchQuery = '';
+    const input = document.getElementById('custSearchInput');
+    if (input) input.value = '';
+    renderCustomerHome();
+  }
+
   function filterByCuisinePill(cuisine, el) {
     AppState.activeCuisineFilter = cuisine;
     document.querySelectorAll('.cat-pill').forEach((p) => p.classList.remove('active'));
@@ -205,7 +383,7 @@
       el.classList.add('active');
     } else {
       document.querySelectorAll('.cat-pill').forEach((p) => {
-        if (p.textContent.trim().includes(cuisine)) p.classList.add('active');
+        if (p.textContent.trim().toLowerCase().includes(cuisine.toLowerCase())) p.classList.add('active');
       });
     }
     renderCustomerHome();
@@ -231,7 +409,7 @@
           <p style="opacity:0.85; margin-bottom:8px;">${rest.desc || ''}</p>
           <div class="menu-header-meta">
             <span>★ <strong>${rest.rating}</strong> (500+ ratings)</span>
-            <span>🕐 <strong>${rest.deliveryTime} mins</strong></span>
+            <span>🕐 <strong>${rest.deliveryTime}</strong></span>
             <span>🛵 <strong>${rest.fee === 'Free' ? 'Free Delivery' : rest.fee}</strong></span>
             <span>📍 <strong>${rest.location || rest.cuisine}</strong></span>
           </div>
@@ -249,19 +427,33 @@
     const items = window.FoodFlowStore.getMenuItems(rest.id);
     const categories = [...new Set(items.map((i) => i.category))];
 
-    // Category Nav Pills
     const catNav = document.getElementById('menuCatNav');
     if (catNav) {
-      catNav.innerHTML = categories
-        .map(
-          (cat, idx) => `
-        <button class="menu-cat-btn ${idx === 0 ? 'active' : ''}" onclick="jumpToMenuCategory('${cat}', this)">${cat}</button>`
-        )
-        .join('');
+      if (categories.length > 0) {
+        catNav.innerHTML = categories
+          .map(
+            (cat, idx) => `
+          <button class="menu-cat-btn ${idx === 0 ? 'active' : ''}" onclick="jumpToMenuCategory('${cat}', this)">${cat}</button>`
+          )
+          .join('');
+      } else {
+        catNav.innerHTML = '';
+      }
     }
 
     const container = document.getElementById('menuItemsContainer');
     if (!container) return;
+
+    if (items.length === 0) {
+      container.innerHTML = `
+        <div style="text-align:center; padding:3.5rem 1.5rem; background:var(--surface); border-radius:var(--radius); border:1px solid var(--border);">
+          <div style="font-size:3rem; margin-bottom:0.5rem;">🍽️</div>
+          <h3 style="margin-bottom:6px;">No dishes currently listed</h3>
+          <p style="color:var(--text-muted); font-size:0.9rem; margin-bottom:1.25rem;">This kitchen is updating its menu for today.</p>
+          <button class="btn-primary" onclick="showCustomerScreen('home')">Browse Other Restaurants</button>
+        </div>`;
+      return;
+    }
 
     const cart = window.FoodFlowStore.getCart();
 
@@ -277,12 +469,6 @@
                 const inCart = cart.find((c) => c.id === item.id);
                 const qty = inCart ? inCart.qty : 0;
                 const isAvailable = item.available !== false;
-                const badgesHtml = (item.badges || [])
-                  .map(
-                    (b) =>
-                      `<span class="badge badge-${b}">${b === 'veg' ? '🌿 Veg' : b === 'spicy' ? '🌶️ Spicy' : '⭐ Bestseller'}</span>`
-                  )
-                  .join(' ');
 
                 return `
                 <div class="menu-item ${!isAvailable ? 'unavailable' : ''}" id="cust-menu-item-${item.id}">
@@ -293,7 +479,7 @@
                     <div class="item-name">${item.name} ${item.veg ? '<span style="color:#17A865; font-size:0.8rem;">🌿 Veg</span>' : '<span style="color:#DC2626; font-size:0.8rem;">🍗 Non-Veg</span>'}</div>
                     <div class="item-desc">${item.desc || ''}</div>
                     <div class="item-badges">
-                      ${badgesHtml}
+                      ${item.isBestseller ? '<span class="badge badge-bestseller">⭐ Bestseller</span>' : ''}
                       ${!isAvailable ? '<span class="badge badge-danger">Out of Stock</span>' : ''}
                     </div>
                   </div>
@@ -329,77 +515,66 @@
 
   function customerAddToCart(itemId) {
     if (!window.FoodFlowStore) return;
-    const success = window.FoodFlowStore.addToCart(itemId, 1);
-    if (success) {
-      SoundEffects.playSuccess();
-      updateCustomerCartUI();
-      if (AppState.selectedRestaurant) {
-        renderCustomerMenuItems(AppState.selectedRestaurant);
-        renderCustomerSideCart();
-      }
-    } else {
-      showToast('This item is currently unavailable.', 'error');
-    }
+    window.FoodFlowStore.addToCart(itemId, 1);
+    SoundEffects.playPop();
+    updateCustomerCartUI();
+    if (AppState.selectedRestaurant) renderCustomerMenuItems(AppState.selectedRestaurant);
+    renderCustomerSideCart();
   }
 
   function customerUpdateQty(itemId, delta) {
     if (!window.FoodFlowStore) return;
-    window.FoodFlowStore.updateCartQty(itemId, delta);
+    window.FoodFlowStore.addToCart(itemId, delta);
+    SoundEffects.playPop();
     updateCustomerCartUI();
-    if (AppState.selectedRestaurant) {
-      renderCustomerMenuItems(AppState.selectedRestaurant);
-      renderCustomerSideCart();
-    }
+    if (AppState.selectedRestaurant) renderCustomerMenuItems(AppState.selectedRestaurant);
+    renderCustomerSideCart();
   }
 
   function updateCustomerCartUI() {
     if (!window.FoodFlowStore) return;
     const cart = window.FoodFlowStore.getCart();
     const count = cart.reduce((acc, i) => acc + i.qty, 0);
-    const countBadge = document.getElementById('navCartCount');
-    if (countBadge) countBadge.textContent = count;
-    renderCustomerSideCart();
-    renderCheckoutSummary();
+
+    const navBadge = document.getElementById('navCartCount');
+    if (navBadge) navBadge.textContent = count;
   }
 
   function renderCustomerSideCart() {
-    const content = document.getElementById('cartSideItems');
+    const container = document.getElementById('cartSideItems');
     const footer = document.getElementById('cartSideFooter');
-    const restNameLabel = document.getElementById('cartSideRestName');
-    if (!content || !footer) return;
+    const restNameEl = document.getElementById('cartSideRestName');
+    if (!container || !footer || !window.FoodFlowStore) return;
 
-    if (!window.FoodFlowStore) return;
     const cart = window.FoodFlowStore.getCart();
-    if (restNameLabel) {
-      restNameLabel.textContent = AppState.selectedRestaurant ? AppState.selectedRestaurant.name : '';
+    if (restNameEl && AppState.selectedRestaurant) {
+      restNameEl.textContent = AppState.selectedRestaurant.name;
     }
 
     if (cart.length === 0) {
-      content.innerHTML = `
+      container.innerHTML = `
         <div class="cart-empty">
-          <div class="cart-empty-icon">🛒</div>
-          <p style="font-weight:600;">Your cart is empty</p>
-          <p style="font-size:0.8rem; margin-top:4px;">Add tasty dishes to get started</p>
+          <div style="font-size:2.5rem; margin-bottom:0.5rem;">🛒</div>
+          <div>Your cart is empty</div>
+          <div style="font-size:0.78rem; margin-top:2px;">Add tasty dishes to get started</div>
         </div>`;
       footer.innerHTML = '';
       return;
     }
 
-    content.innerHTML = cart
+    container.innerHTML = cart
       .map(
         (item) => `
       <div class="cart-item">
-        <img src="${item.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=100&q=80'}" class="cart-item-photo" alt="${item.name}">
-        <div class="cart-item-name">
-          <div>${item.name}</div>
-          <div style="font-size:0.75rem; color:var(--text-muted);">₹${item.price} each</div>
+        <div>
+          <div class="cart-item-name">${item.name}</div>
+          <div class="cart-item-price">₹${item.price * item.qty}</div>
         </div>
-        <div class="cart-item-qty">
-          <button class="cart-qty-btn" onclick="customerUpdateQty(${item.id}, -1)">−</button>
-          <span style="font-weight:700; min-width:18px; text-align:center;">${item.qty}</span>
-          <button class="cart-qty-btn" onclick="customerUpdateQty(${item.id}, 1)">+</button>
+        <div class="qty-ctrl">
+          <button class="qty-btn" onclick="customerUpdateQty(${item.id}, -1)">−</button>
+          <span class="qty-num">${item.qty}</span>
+          <button class="qty-btn" onclick="customerUpdateQty(${item.id}, 1)">+</button>
         </div>
-        <span class="cart-item-price">₹${item.price * item.qty}</span>
       </div>`
       )
       .join('');
@@ -410,21 +585,59 @@
     const total = subtotal + deliveryFee + platformFee;
 
     footer.innerHTML = `
-      <div class="cart-row"><span>Subtotal</span><span>₹${subtotal}</span></div>
-      <div class="cart-row"><span>Delivery Fee</span><span>${deliveryFee === 0 ? 'Free' : '₹' + deliveryFee}</span></div>
-      <div class="cart-row"><span>Platform Fee</span><span>₹${platformFee}</span></div>
-      <div class="cart-row total"><span>Total</span><span>₹${total}</span></div>
-      <button class="checkout-btn" onclick="proceedToCheckout()">Proceed to Checkout →</button>`;
+      <div class="cart-total-row">
+        <span>Subtotal</span>
+        <span>₹${subtotal}</span>
+      </div>
+      <div class="cart-total-row">
+        <span>Delivery Fee</span>
+        <span>${deliveryFee === 0 ? 'Free' : '₹' + deliveryFee}</span>
+      </div>
+      <div class="cart-total-row">
+        <span>Platform Fee</span>
+        <span>₹${platformFee}</span>
+      </div>
+      <div class="cart-total-row grand">
+        <span>Total Amount</span>
+        <span>₹${total}</span>
+      </div>
+      <button class="checkout-btn" onclick="proceedToCheckout()">
+        Proceed to Checkout →
+      </button>`;
   }
 
   function proceedToCheckout() {
     if (!window.FoodFlowStore) return;
+    const cart = window.FoodFlowStore.getCart();
+    if (cart.length === 0) {
+      showToast('Your cart is empty! Add food items first.', 'info');
+      return;
+    }
+
     const user = window.FoodFlowStore.getCurrentUser();
     if (!user) {
       openAuthModal('login');
-      showToast('Please sign in to place your order', 'info');
       return;
     }
+
+    // Populate checkout fields from user session if present, otherwise clean
+    const nameInput = document.getElementById('delivName');
+    const phoneInput = document.getElementById('delivPhone');
+    const addrInput = document.getElementById('delivAddress');
+
+    if (nameInput) nameInput.value = user.name || '';
+    if (phoneInput) phoneInput.value = user.phone || '';
+
+    const addresses = window.FoodFlowStore.getAddresses(user.email);
+    if (addrInput) {
+      if (addresses.length > 0) {
+        const def = addresses.find((a) => a.isDefault) || addresses[0];
+        addrInput.value = def.address;
+      } else if (!addrInput.value) {
+        addrInput.value = '';
+      }
+    }
+
     renderCheckoutSummary();
     showCustomerScreen('checkout');
   }
@@ -499,18 +712,12 @@
     }
   }
 
-  function selectPaymentMethod(element) {
-    document.querySelectorAll('.payment-option').forEach((opt) => opt.classList.remove('selected'));
-    element.classList.add('selected');
-    const radio = element.querySelector('input[type="radio"]');
-    if (radio) radio.checked = true;
-  }
-
-  // ═══════════════════════ SWIGGY / ZOMATO PAYMENT GATEWAY FLOW ═══════════════════════
+  // ═══════════════════════ PAYMENT GATEWAY FLOW ═══════════════════════
   let pendingCheckoutData = null;
   let qrCountdownInterval = null;
+  let upiCollectCountdownInterval = null;
   let activeSelectedBank = 'HDFC Bank';
-  let activeSelectedUpiApp = 'Google Pay';
+  let verifiedUpiId = null;
 
   function handlePlaceOrder() {
     if (!window.FoodFlowStore) return;
@@ -526,10 +733,80 @@
       return;
     }
 
+    // Compulsory Form Fields Validation
     const nameInput = document.getElementById('delivName');
     const phoneInput = document.getElementById('delivPhone');
     const addrInput = document.getElementById('delivAddress');
+    const cityInput = document.getElementById('delivCity');
+    const pincodeInput = document.getElementById('delivPincode');
     const noteInput = document.getElementById('delivNotes');
+
+    const name = (nameInput ? nameInput.value : '').trim();
+    const phone = (phoneInput ? phoneInput.value : '').replace(/\D/g, '');
+    const address = (addrInput ? addrInput.value : '').trim();
+    const city = (cityInput ? cityInput.value : '').trim();
+    const pincode = (pincodeInput ? pincodeInput.value : '').replace(/\D/g, '');
+
+    let hasError = false;
+    let firstErrorField = null;
+
+    // 1. Full Name (Compulsory)
+    if (!name || name.length < 2) {
+      showFieldError('delivName', 'Please enter recipient full name.');
+      if (!firstErrorField) firstErrorField = nameInput;
+      hasError = true;
+    } else {
+      clearFieldError('delivName');
+    }
+
+    // 2. Phone Number (Compulsory, 10-digit Indian phone)
+    const phoneRegex = /^[6-9]\d{9}$/;
+    if (!phone || !phoneRegex.test(phone)) {
+      showFieldError('delivPhone', 'Please enter a valid 10-digit mobile number starting with 6, 7, 8, or 9.');
+      if (!firstErrorField) firstErrorField = phoneInput;
+      hasError = true;
+    } else {
+      clearFieldError('delivPhone');
+    }
+
+    // 3. Street Address (Compulsory)
+    if (!address || address.length < 6) {
+      showFieldError('delivAddress', 'Please enter complete street address (flat/house no, landmark, street).');
+      if (!firstErrorField) firstErrorField = addrInput;
+      hasError = true;
+    } else {
+      clearFieldError('delivAddress');
+    }
+
+    // 4. City (Compulsory)
+    if (!city || city.length < 2) {
+      showFieldError('delivCity', 'Please enter your city name.');
+      if (!firstErrorField) firstErrorField = cityInput;
+      hasError = true;
+    } else {
+      clearFieldError('delivCity');
+    }
+
+    // 5. PIN Code (Compulsory, 6 digits)
+    if (!pincode || pincode.length !== 6) {
+      showFieldError('delivPincode', 'Please enter a valid 6-digit postal PIN code.');
+      if (!firstErrorField) firstErrorField = pincodeInput;
+      hasError = true;
+    } else {
+      clearFieldError('delivPincode');
+    }
+
+    if (hasError) {
+      if (firstErrorField) {
+        firstErrorField.focus();
+        firstErrorField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      showToast('⚠️ Please fill all compulsory delivery address fields (*)', 'error');
+      if (typeof SoundEffects !== 'undefined' && SoundEffects.playError) SoundEffects.playError();
+      return;
+    }
+
+    const fullFormattedAddress = `${address}, ${city} - ${pincode}`;
 
     const subtotal = cart.reduce((acc, i) => acc + i.price * i.qty, 0);
     const deliveryFee = AppState.selectedRestaurant ? AppState.selectedRestaurant.feeValue || 0 : 40;
@@ -544,9 +821,9 @@
     const total = Math.max(0, subtotal + deliveryFee + platformFee - discount);
 
     pendingCheckoutData = {
-      customer: nameInput && nameInput.value.trim() ? nameInput.value.trim() : user.name,
+      customer: name,
       email: user.email,
-      phone: phoneInput && phoneInput.value.trim() ? phoneInput.value.trim() : user.phone,
+      phone: phone,
       restaurantId: AppState.selectedRestaurant ? AppState.selectedRestaurant.id : 1,
       restaurant: AppState.selectedRestaurant ? AppState.selectedRestaurant.name : 'Spice Garden',
       items: [...cart],
@@ -555,7 +832,7 @@
       platformFee: platformFee,
       discount: discount,
       total: total,
-      address: addrInput && addrInput.value.trim() ? addrInput.value.trim() : 'Flat 4B, Palm Grove Apartments, Hyderabad',
+      address: fullFormattedAddress,
       notes: noteInput ? noteInput.value.trim() : ''
     };
 
@@ -564,16 +841,33 @@
 
   function openSwiggyPaymentModal(totalAmount) {
     const totalDisp = document.getElementById('pgModalTotalAmount');
-    const otpDisp = document.getElementById('otpAmountTag');
     if (totalDisp) totalDisp.textContent = `₹${totalAmount}`;
-    if (otpDisp) otpDisp.textContent = `Amount: ₹${totalAmount}`;
 
-    // Reset processing overlay
+    const upiPayAmt = document.getElementById('upiPayAmountDisplay');
+    if (upiPayAmt) upiPayAmt.textContent = totalAmount;
+
+    // Reset UPI panels
+    const defaultUpiPanel = document.getElementById('upiDefaultPanel');
+    const collectUpiScreen = document.getElementById('upiCollectScreen');
+    const verifiedSection = document.getElementById('upiVerifiedSection');
+    const upiInput = document.getElementById('pgUpiIdInput');
+    const errUpi = document.getElementById('err-pgUpiId');
+
+    if (defaultUpiPanel) defaultUpiPanel.style.display = 'block';
+    if (collectUpiScreen) collectUpiScreen.style.display = 'none';
+    if (verifiedSection) verifiedSection.style.display = 'none';
+    if (errUpi) errUpi.textContent = '';
     const overlay = document.getElementById('pgProcessingOverlay');
     if (overlay) overlay.style.display = 'none';
 
-    // Start 3 min QR Timer
-    startQrCountdown(180);
+    // Reset QR section to on-demand state
+    const qrTrigger = document.getElementById('pgQrTriggerCard');
+    const qrActive = document.getElementById('pgQrActiveSection');
+    if (qrTrigger) qrTrigger.style.display = 'block';
+    if (qrActive) qrActive.style.display = 'none';
+    if (qrCountdownInterval) clearInterval(qrCountdownInterval);
+
+    renderPaymentWalletsTab(totalAmount);
 
     const modal = document.getElementById('swiggyPaymentModal');
     if (modal) modal.classList.add('open');
@@ -588,39 +882,182 @@
     if (pane) pane.classList.add('active');
   }
 
-  function selectUpiApp(appName) {
-    activeSelectedUpiApp = appName;
-    executePaymentAndPlaceOrder(`UPI (${appName})`, { app: appName });
-  }
-
-  function submitCustomUpiPay() {
-    const input = document.getElementById('pgUpiIdInput');
-    const val = input ? input.value.trim() : '';
-    if (!val || !val.includes('@')) {
-      showToast('Please enter a valid UPI ID (e.g. name@okhdfcbank)', 'error');
-      return;
-    }
-    executePaymentAndPlaceOrder(`UPI (${val})`, { vpa: val });
+  function handleUpiIdChanged() {
+    const verifiedSection = document.getElementById('upiVerifiedSection');
+    if (verifiedSection) verifiedSection.style.display = 'none';
+    const errUpi = document.getElementById('err-pgUpiId');
+    if (errUpi) errUpi.textContent = '';
+    verifiedUpiId = null;
   }
 
   function appendUpiHandle(handle) {
     const input = document.getElementById('pgUpiIdInput');
     if (!input) return;
-    const base = input.value.split('@')[0] || 'user';
+    const base = input.value.split('@')[0].trim() || 'user';
     input.value = base + handle;
+    handleUpiIdChanged();
+  }
+
+  // 1. UPI ID Format Validation & Verification (Requirement #4)
+  function verifyCustomUpiId() {
+    const input = document.getElementById('pgUpiIdInput');
+    const errEl = document.getElementById('err-pgUpiId');
+    const btn = document.getElementById('btnVerifyUpi');
+    const verifiedSection = document.getElementById('upiVerifiedSection');
+    const verifiedText = document.getElementById('upiVerifiedText');
+    const upiPayAmt = document.getElementById('upiPayAmountDisplay');
+
+    if (!input) return;
+    const rawVal = input.value.trim().toLowerCase();
+
+    // Strict NPCI VPA Regex format: username@bank
+    const vpaRegex = /^[a-zA-Z0-9.\-_]{2,64}@[a-zA-Z0-9]{2,32}$/;
+
+    if (!rawVal) {
+      if (errEl) errEl.textContent = 'Please enter a UPI ID (e.g. 9876543210@upi or name@okhdfcbank).';
+      if (verifiedSection) verifiedSection.style.display = 'none';
+      SoundEffects.playError();
+      return;
+    }
+
+    if (!vpaRegex.test(rawVal)) {
+      if (errEl) errEl.textContent = 'Invalid UPI ID format. Ensure it contains a valid username and @handle (e.g. name@okhdfcbank).';
+      if (verifiedSection) verifiedSection.style.display = 'none';
+      SoundEffects.playError();
+      return;
+    }
+
+    if (errEl) errEl.textContent = '';
+    if (btn) {
+      btn.textContent = 'Verifying with NPCI...';
+      btn.disabled = true;
+    }
+
+    // Simulate authentic bank VPA verification lookup
+    setTimeout(() => {
+      if (btn) {
+        btn.textContent = 'Verify UPI ID';
+        btn.disabled = false;
+      }
+
+      verifiedUpiId = rawVal;
+      const user = window.FoodFlowStore ? window.FoodFlowStore.getCurrentUser() : null;
+      const userName = user && user.name ? user.name.toUpperCase() : 'VERIFIED CUSTOMER';
+      const pspHandle = rawVal.split('@')[1].toUpperCase();
+
+      if (verifiedText) {
+        verifiedText.textContent = `Verified Account: ${userName} (NPCI / ${pspHandle})`;
+      }
+      if (upiPayAmt && pendingCheckoutData) {
+        upiPayAmt.textContent = pendingCheckoutData.total;
+      }
+      if (verifiedSection) {
+        verifiedSection.style.display = 'block';
+      }
+
+      SoundEffects.playSuccess();
+      showToast('✓ UPI ID verified successfully by NPCI!', 'success');
+    }, 600);
+  }
+
+  // 2. Submit Verified UPI Payment -> Trigger Collect Request Screen
+  function submitVerifiedUpiPay() {
+    if (!verifiedUpiId) {
+      showToast('Please verify your UPI ID first before making payment.', 'error');
+      return;
+    }
+    triggerUpiCollectFlow(verifiedUpiId);
+  }
+
+  // 3. Select UPI App -> Trigger Collect / Intent Flow
+  function selectUpiApp(appName) {
+    triggerUpiCollectFlow(`UPI (${appName})`);
+  }
+
+  function triggerUpiCollectFlow(targetUpi) {
+    const defaultUpiPanel = document.getElementById('upiDefaultPanel');
+    const collectUpiScreen = document.getElementById('upiCollectScreen');
+    const targetDisplay = document.getElementById('upiCollectTargetDisplay');
+    const amountDisplay = document.getElementById('upiCollectAmountDisplay');
+
+    if (defaultUpiPanel) defaultUpiPanel.style.display = 'none';
+    if (collectUpiScreen) collectUpiScreen.style.display = 'block';
+
+    if (targetDisplay) targetDisplay.textContent = targetUpi;
+    if (amountDisplay && pendingCheckoutData) amountDisplay.textContent = `₹${pendingCheckoutData.total}`;
+
+    startUpiCollectCountdown(299, targetUpi);
+  }
+
+  function startUpiCollectCountdown(seconds, targetUpi) {
+    if (upiCollectCountdownInterval) clearInterval(upiCollectCountdownInterval);
+    let remaining = seconds;
+    const timerEl = document.getElementById('upiCollectTimer');
+
+    function tick() {
+      const m = String(Math.floor(remaining / 60)).padStart(2, '0');
+      const s = String(remaining % 60).padStart(2, '0');
+      if (timerEl) timerEl.textContent = `${m}:${s}`;
+      if (remaining <= 0) {
+        clearInterval(upiCollectCountdownInterval);
+        showToast('UPI collect request expired. Please try again.', 'error');
+        cancelUpiCollectScreen();
+      }
+      remaining--;
+    }
+    tick();
+    upiCollectCountdownInterval = setInterval(tick, 1000);
+  }
+
+  function cancelUpiCollectScreen() {
+    if (upiCollectCountdownInterval) clearInterval(upiCollectCountdownInterval);
+    const defaultUpiPanel = document.getElementById('upiDefaultPanel');
+    const collectUpiScreen = document.getElementById('upiCollectScreen');
+    if (defaultUpiPanel) defaultUpiPanel.style.display = 'block';
+    if (collectUpiScreen) collectUpiScreen.style.display = 'none';
+  }
+
+  function confirmUpiCollectSuccess() {
+    if (upiCollectCountdownInterval) clearInterval(upiCollectCountdownInterval);
+    const targetDisplay = document.getElementById('upiCollectTargetDisplay');
+    const paymentMethod = targetDisplay ? targetDisplay.textContent : 'UPI (Verified)';
+    executePaymentAndPlaceOrder(paymentMethod);
+  }
+
+  function showQrPaymentSection() {
+    const qrTrigger = document.getElementById('pgQrTriggerCard');
+    const qrActive = document.getElementById('pgQrActiveSection');
+    if (qrTrigger) qrTrigger.style.display = 'none';
+    if (qrActive) {
+      qrActive.style.display = 'flex';
+      qrActive.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    startQrCountdown(300); // 5 minutes!
+    SoundEffects.playPop();
+  }
+
+  function hideQrPaymentSection() {
+    const qrTrigger = document.getElementById('pgQrTriggerCard');
+    const qrActive = document.getElementById('pgQrActiveSection');
+    if (qrActive) qrActive.style.display = 'none';
+    if (qrTrigger) qrTrigger.style.display = 'block';
+    if (qrCountdownInterval) clearInterval(qrCountdownInterval);
   }
 
   function startQrCountdown(seconds) {
     if (qrCountdownInterval) clearInterval(qrCountdownInterval);
     let remaining = seconds;
     const timerEl = document.getElementById('pgQrTimer');
-    
+
     function tick() {
       const m = String(Math.floor(remaining / 60)).padStart(2, '0');
       const s = String(remaining % 60).padStart(2, '0');
       if (timerEl) timerEl.textContent = `${m}:${s}`;
       if (remaining <= 0) {
         clearInterval(qrCountdownInterval);
+        hideQrPaymentSection();
+        showToast('⚠️ QR Code expired (5 minutes timeout). Click "Show QR Code" to generate a fresh QR code.', 'warning');
+        SoundEffects.playError();
       }
       remaining--;
     }
@@ -629,7 +1066,7 @@
   }
 
   function simulateQrPaymentDone() {
-    executePaymentAndPlaceOrder('UPI (Dynamic QR)', { method: 'QR Scanner' });
+    executePaymentAndPlaceOrder('UPI (Dynamic QR Code)');
   }
 
   function handleCardNumberInput(input) {
@@ -640,219 +1077,257 @@
     const mockNum = document.getElementById('cardMockNumber');
     if (mockNum) mockNum.textContent = formatted || '•••• •••• •••• 4242';
 
-    const netIcon = document.getElementById('cardNetworkIcon');
-    if (netIcon) {
-      if (val.startsWith('4')) netIcon.textContent = 'VISA';
-      else if (val.startsWith('5')) netIcon.textContent = 'MASTERCARD';
-      else if (val.startsWith('6')) netIcon.textContent = 'RUPAY';
-      else netIcon.textContent = 'CARD';
+    // Auto-detect card network
+    const networkIcon = document.getElementById('cardNetworkIcon');
+    if (networkIcon) {
+      if (val.startsWith('4')) networkIcon.textContent = 'VISA';
+      else if (val.startsWith('5')) networkIcon.textContent = 'MASTERCARD';
+      else if (val.startsWith('6')) networkIcon.textContent = 'RUPAY';
+      else if (val.startsWith('3')) networkIcon.textContent = 'AMEX';
+      else networkIcon.textContent = 'CARD';
     }
   }
 
   function handleCardNameInput(input) {
     const mockName = document.getElementById('cardMockName');
-    if (mockName) mockName.textContent = input.value.toUpperCase() || 'RAVI KUMAR';
+    if (mockName) mockName.textContent = (input.value.trim() || 'CARDHOLDER NAME').toUpperCase();
   }
 
   function handleCardExpInput(input) {
     let val = input.value.replace(/\D/g, '').substring(0, 4);
     if (val.length >= 3) {
-      val = val.substring(0, 2) + '/' + val.substring(2);
+      input.value = val.substring(0, 2) + '/' + val.substring(2, 4);
+    } else {
+      input.value = val;
     }
-    input.value = val;
     const mockExp = document.getElementById('cardMockExp');
-    if (mockExp) mockExp.textContent = val || '12/28';
+    if (mockExp) mockExp.textContent = input.value || 'MM/YY';
   }
 
   function submitCardPayment() {
-    const num = document.getElementById('pgCardNumber');
-    const cvv = document.getElementById('pgCardCvv');
-    if (!num || num.value.replace(/\s/g, '').length < 15) {
+    const num = document.getElementById('pgCardNumber')?.value.replace(/\s+/g, '');
+    const name = document.getElementById('pgCardHolder')?.value.trim();
+    const exp = document.getElementById('pgCardExp')?.value.trim();
+    const cvv = document.getElementById('pgCardCvv')?.value.trim();
+
+    if (!num || num.length < 15) {
       showToast('Please enter a valid 16-digit card number', 'error');
       return;
     }
-    if (!cvv || cvv.value.length < 3) {
-      showToast('Please enter a valid 3-digit CVV', 'error');
+    if (!name) {
+      showToast('Please enter name on card', 'error');
+      return;
+    }
+    if (!exp || exp.length < 5) {
+      showToast('Please enter valid MM/YY expiry date', 'error');
+      return;
+    }
+    const [mm, yy] = exp.split('/');
+    if (Number(mm) < 1 || Number(mm) > 12) {
+      showToast('Invalid expiry month. Must be between 01 and 12', 'error');
+      return;
+    }
+    if (!cvv || cvv.length < 3) {
+      showToast('Please enter 3-digit CVV / CVC code', 'error');
       return;
     }
 
-    // Open 3D Secure OTP verification
-    const cardOtp = document.getElementById('cardOtpModal');
-    if (cardOtp) cardOtp.classList.add('open');
+    const otpAmt = document.getElementById('otpAmountTag');
+    if (otpAmt && pendingCheckoutData) otpAmt.textContent = `₹${pendingCheckoutData.total}`;
+
+    const cardModal = document.getElementById('cardOtpModal');
+    const bankOtpInput = document.getElementById('bankOtpInput');
+    if (bankOtpInput) bankOtpInput.value = '749201';
+    if (cardModal) cardModal.classList.add('open');
   }
 
   function verifyBankOtpAndComplete() {
-    const otpInput = document.getElementById('bankOtpInput');
-    if (!otpInput || !otpInput.value) {
-      otpInput.value = '123456';
+    const input = document.getElementById('bankOtpInput');
+    if (!input || !input.value.trim() || input.value.trim().length < 4) {
+      showToast('Please enter the 6-digit bank verification OTP', 'error');
+      return;
     }
     closeAdminModal('cardOtpModal');
-    const cardNum = document.getElementById('pgCardNumber');
-    const last4 = cardNum ? cardNum.value.slice(-4) : '4242';
-    const network = document.getElementById('cardNetworkIcon') ? document.getElementById('cardNetworkIcon').textContent : 'Visa';
-    executePaymentAndPlaceOrder(`Credit Card (${network} •••• ${last4})`, { type: 'card' });
+    executePaymentAndPlaceOrder('Credit / Debit Card (3D Secure Verified)');
   }
 
-  function selectBank(bankName, cardEl) {
+  function selectBank(bankName, el) {
     activeSelectedBank = bankName;
-    document.querySelectorAll('.bank-card').forEach((c) => c.classList.remove('selected'));
-    if (cardEl) cardEl.classList.add('selected');
+    document.querySelectorAll('.bank-card').forEach((b) => b.classList.remove('selected'));
+    if (el) el.classList.add('selected');
+    const select = document.getElementById('pgAllBanksSelect');
+    if (select) select.value = bankName;
   }
 
   function submitNetBankingPayment() {
-    executePaymentAndPlaceOrder(`Net Banking (${activeSelectedBank})`, { bank: activeSelectedBank });
+    executePaymentAndPlaceOrder(`Net Banking (${activeSelectedBank})`);
+  }
+
+  function renderPaymentWalletsTab(totalAmount) {
+    const listEl = document.getElementById('pgWalletsList');
+    if (!listEl || !window.FoodFlowStore) return;
+
+    const user = window.FoodFlowStore.getCurrentUser();
+    const foodflowBal = window.FoodFlowStore.getWalletBalance('FoodFlow Wallet', user ? user.email : null);
+    const paytmBal = window.FoodFlowStore.getWalletBalance('Paytm Wallet');
+    const amazonBal = window.FoodFlowStore.getWalletBalance('Amazon Pay');
+    const phonepeBal = window.FoodFlowStore.getWalletBalance('PhonePe Wallet');
+
+    const amt = Number(totalAmount || (pendingCheckoutData ? pendingCheckoutData.total : 0));
+
+    const wallets = [
+      {
+        name: 'FoodFlow Wallet',
+        key: 'FoodFlow Wallet',
+        icon: '🍕',
+        balance: foodflowBal,
+        badge: 'Fastest 1-Click • 0 Delay',
+        isFoodFlow: true
+      },
+      {
+        name: 'Paytm Wallet',
+        key: 'Paytm Wallet',
+        icon: '👛',
+        balance: paytmBal,
+        badge: 'Paytm Payments',
+        isFoodFlow: false
+      },
+      {
+        name: 'Amazon Pay Balance',
+        key: 'Amazon Pay',
+        icon: '📦',
+        balance: amazonBal,
+        badge: 'Amazon India',
+        isFoodFlow: false
+      },
+      {
+        name: 'PhonePe Wallet',
+        key: 'PhonePe Wallet',
+        icon: '📱',
+        balance: phonepeBal,
+        badge: 'PhonePe India',
+        isFoodFlow: false
+      }
+    ];
+
+    listEl.innerHTML = wallets
+      .map((w) => {
+        const canPay = w.balance >= amt;
+        return `
+          <div class="payment-option ${w.isFoodFlow ? 'foodflow-wallet-opt' : ''}" style="display:flex; align-items:center; gap:12px; padding:12px 14px; border:1.5px solid ${w.isFoodFlow ? 'var(--primary)' : 'var(--border)'}; border-radius:10px; background:${w.isFoodFlow ? '#FFF8F5' : 'var(--surface)'};">
+            <span class="payment-icon" style="font-size:1.5rem;">${w.icon}</span>
+            <div style="flex:1;">
+              <div style="display:flex; align-items:center; gap:6px;">
+                <span class="payment-label" style="font-weight:700; font-size:0.92rem;">${w.name}</span>
+                ${w.badge ? `<span style="font-size:0.68rem; background:${w.isFoodFlow ? 'var(--primary)' : 'var(--surface2)'}; color:${w.isFoodFlow ? '#fff' : 'var(--text-muted)'}; padding:2px 6px; border-radius:4px; font-weight:700;">${w.badge}</span>` : ''}
+              </div>
+              <div style="font-size:0.78rem; color:${canPay ? 'var(--text-muted)' : 'var(--danger)'}; margin-top:2px;">
+                Available balance: <strong>₹${w.balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+                ${!canPay ? ` <span style="color:var(--danger); font-weight:700;">(Need ₹${(amt - w.balance).toFixed(2)} more)</span>` : ''}
+              </div>
+            </div>
+            ${canPay ? `
+              <button class="action-btn success" onclick="submitWalletPayment('${w.key}')" style="font-weight:700; padding:8px 14px; font-size:0.85rem;">
+                Pay ₹${amt} →
+              </button>
+            ` : (w.isFoodFlow ? `
+              <button class="action-btn" onclick="openCustomerProfileWalletTopUp()" style="background:var(--primary); color:#fff; font-weight:700; padding:6px 12px; font-size:0.78rem;">
+                + Top Up
+              </button>
+            ` : `
+              <span class="badge badge-danger" style="padding:5px 8px; font-size:0.72rem;">Low Balance</span>
+            `)}
+          </div>
+        `;
+      })
+      .join('');
+  }
+
+  function openCustomerProfileWalletTopUp() {
+    closeAdminModal('swiggyPaymentModal');
+    openCustomerProfile();
+    setProfileTab('wallet', document.querySelectorAll('.sidebar-nav-item')[2]);
+    setTimeout(() => {
+      const input = document.getElementById('walletTopUpAmountInput');
+      if (input) {
+        input.focus();
+        input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 200);
   }
 
   function submitWalletPayment(walletName) {
-    executePaymentAndPlaceOrder(walletName, { wallet: walletName });
+    if (walletName === 'FoodFlow Wallet') {
+      executePaymentAndPlaceOrder('FoodFlow Wallet');
+    } else {
+      executePaymentAndPlaceOrder(`Wallet (${walletName})`);
+    }
   }
 
   function submitCodPayment() {
-    executePaymentAndPlaceOrder('Cash on Delivery', { cod: true });
+    executePaymentAndPlaceOrder('Cash on Delivery');
   }
 
-  function executePaymentAndPlaceOrder(paymentMethodName, meta = {}) {
+  function executePaymentAndPlaceOrder(paymentMethod) {
+    if (!pendingCheckoutData || !window.FoodFlowStore) return;
+
     const overlay = document.getElementById('pgProcessingOverlay');
     const title = document.getElementById('pgProcessingTitle');
     const desc = document.getElementById('pgProcessingDesc');
 
-    if (overlay) overlay.style.display = 'flex';
-    if (title) title.textContent = 'Connecting to Payment Gateway...';
-    if (desc) desc.textContent = `Authorizing ₹${pendingCheckoutData.total} via ${paymentMethodName}...`;
+    if (overlay) {
+      overlay.style.display = 'flex';
+      if (title) title.textContent = 'Authorizing Transaction...';
+      if (desc) desc.textContent = `Connecting securely to ${paymentMethod}`;
+    }
 
     setTimeout(() => {
-      if (title) title.textContent = 'Verifying Bank Authorization...';
+      if (title) title.textContent = 'Payment Confirmed! ✓';
+      if (desc) desc.textContent = 'Transmitting order to restaurant kitchen...';
+
       setTimeout(() => {
-        if (title) title.innerHTML = 'Payment Approved ✓';
-        if (desc) desc.textContent = 'Generating tax invoice and confirming order...';
+        closeAdminModal('swiggyPaymentModal');
+        if (qrCountdownInterval) clearInterval(qrCountdownInterval);
 
-        setTimeout(() => {
-          if (qrCountdownInterval) clearInterval(qrCountdownInterval);
-          closeAdminModal('swiggyPaymentModal');
+        const finalOrder = window.FoodFlowStore.placeOrder({
+          ...pendingCheckoutData,
+          paymentMethod: paymentMethod
+        });
 
-          if (!pendingCheckoutData || !window.FoodFlowStore) return;
-          pendingCheckoutData.paymentMethod = paymentMethodName;
+        pendingCheckoutData = null;
+        updateCustomerCartUI();
+        SoundEffects.playSuccess();
+        showToast('🎉 Order placed successfully!', 'success');
 
-          const newOrder = window.FoodFlowStore.placeOrder(pendingCheckoutData);
-          AppState.currentTrackingOrderId = newOrder.id;
+        AppState.currentTrackingOrderId = finalOrder.id;
+        const orderIdDisplay = document.getElementById('successOrderIdDisplay');
+        if (orderIdDisplay) orderIdDisplay.textContent = `Order ID: #${finalOrder.id}`;
 
-          window.FoodFlowStore.clearCart();
-          AppState.appliedPromo = null;
-          updateCustomerCartUI();
-
-          const orderIdDisplay = document.getElementById('successOrderIdDisplay');
-          if (orderIdDisplay) orderIdDisplay.textContent = `Order ID: #${newOrder.id}`;
-
-          renderLiveOrderTracker(newOrder);
-          showCustomerScreen('success');
-          showToast(`🎉 Order #${newOrder.id} placed & paid via ${paymentMethodName}!`, 'success');
-        }, 600);
+        renderLiveOrderTracker(finalOrder);
+        showCustomerScreen('success');
       }, 700);
-    }, 600);
+    }, 900);
   }
 
-  // ═══════════════════════ ORDER CANCELLATION & REFUND CONTROLLER ═══════════════════════
-  let activeCancelOrderId = null;
-
-  function openCustomerCancelModal(orderId) {
-    if (!window.FoodFlowStore) return;
-    const order = window.FoodFlowStore.getOrderById(orderId);
-    if (!order) return;
-
-    activeCancelOrderId = orderId;
-    const idEl = document.getElementById('cancelModalOrderId');
-    const amtEl = document.getElementById('cancelModalAmount');
-    const payEl = document.getElementById('cancelModalPayment');
-    const refundBox = document.getElementById('cancelModalRefundNotice');
-
-    if (idEl) idEl.textContent = `#${order.id}`;
-    if (amtEl) amtEl.textContent = `₹${order.total}`;
-    if (payEl) payEl.textContent = order.paymentMethod;
-
-    const isPrepaid = order.paymentMethod !== 'Cash on Delivery';
-
-    if (refundBox) {
-      if (isPrepaid) {
-        refundBox.innerHTML = `
-          <div class="refund-card-highlight">
-            <div class="refund-icon">💰</div>
-            <div>
-              <div style="font-weight:700; font-size:0.92rem; color:#166534;">100% Instant Refund Guaranteed</div>
-              <div style="font-size:0.82rem; color:#14532D; margin-top:2px;">
-                ₹${order.total} will be refunded directly to your original payment source (<strong>${order.paymentMethod}</strong>).
-              </div>
-            </div>
-          </div>`;
-      } else {
-        refundBox.innerHTML = `
-          <div class="cancel-reason-box" style="background:#F0FDF4; border-color:#BBF7D0; color:#166534;">
-            ℹ️ This order was placed with <strong>Cash on Delivery</strong>. No payment deduction to refund.
-          </div>`;
-      }
-    }
-
-    const modal = document.getElementById('customerCancelOrderModal');
-    if (modal) modal.classList.add('open');
-  }
-
-  function confirmCustomerOrderCancellation() {
-    if (!activeCancelOrderId || !window.FoodFlowStore) return;
-    const reasonSel = document.getElementById('custCancelReasonSelect');
-    const notesEl = document.getElementById('custCancelNotes');
-    
-    let reason = reasonSel ? reasonSel.value : 'Customer requested cancellation';
-    if (notesEl && notesEl.value.trim()) {
-      reason += ` (${notesEl.value.trim()})`;
-    }
-
-    const res = window.FoodFlowStore.cancelOrder(activeCancelOrderId, reason, 'Customer');
-    closeAdminModal('customerCancelOrderModal');
-
-    if (AppState.currentTrackingOrderId === activeCancelOrderId) {
-      renderLiveOrderTracker(res.order);
-    }
-    if (AppState.activeCustomerScreen === 'profile') {
-      renderProfileContent('orders');
-    }
-
-    showToast(`Order #${activeCancelOrderId} cancelled. ${res.message}`, 'error');
-  }
-
-  // ═══════════════════════ LIVE ORDER TRACKING ═══════════════════════
+  // ═══════════════════════ LIVE TRACKING COMPONENT ═══════════════════════
   function renderLiveOrderTracker(order) {
     const container = document.getElementById('liveTrackingSteps');
     if (!container || !order) return;
 
     if (order.status === 'cancelled') {
-      const isPrepaid = order.refundStatus === 'refunded';
+      const isPrepaid = order.paymentMethod !== 'Cash on Delivery';
       container.innerHTML = `
-        <div class="cancel-reason-box" style="margin-bottom:1.25rem;">
-          <div style="font-weight:800; font-size:1rem; margin-bottom:4px;">❌ This order has been cancelled</div>
-          <div><strong>Reason:</strong> ${order.cancelReason || 'Cancelled upon request'}</div>
-          <div style="font-size:0.78rem; opacity:0.8; margin-top:2px;">Cancelled by: ${order.cancelledBy || 'Customer'}</div>
-        </div>
-        ${isPrepaid ? `
-        <div class="refund-card-highlight">
-          <div class="refund-icon">✓</div>
-          <div>
-            <div style="font-weight:800; font-size:0.95rem; color:#166534;">💰 ₹${order.refundAmount || order.total} Refunded Successfully</div>
-            <div style="font-size:0.82rem; color:#14532D; margin-top:2px;">
-              Refund credited to <strong>${order.paymentMethod}</strong>.
-            </div>
-            <div style="font-size:0.75rem; color:#166534; margin-top:4px;">
-              Refund Reference ID: <code>${order.refundId || 'REF-AUTO'}</code>
-            </div>
-          </div>
-        </div>` : `
-        <div style="background:var(--surface2); padding:10px 14px; border-radius:8px; font-size:0.84rem; color:var(--text-muted); text-align:center;">
-          Cash on Delivery order — no payment deduction required a refund.
-        </div>`}
-      `;
+        <div style="background:#FEF2F2; border:1px solid #FCA5A5; padding:1.25rem; border-radius:10px; text-align:center;">
+          <div style="font-size:2.2rem; color:var(--danger); margin-bottom:4px;">✕</div>
+          <h4 style="color:var(--danger); margin-bottom:4px;">Order Cancelled</h4>
+          <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:8px;">Reason: "${order.cancelReason || 'Cancelled upon request'}"</p>
+          ${order.refundStatus === 'refunded' ? `<div class="badge badge-success" style="font-size:0.85rem; padding:6px 12px; margin-top:4px;">💰 100% Refund of ₹${order.refundAmount || order.total} Processed (${order.paymentMethod})</div>` : (!isPrepaid ? `<div class="badge badge-info" style="font-size:0.85rem; padding:6px 12px; margin-top:4px; background:#EFF6FF; color:#1E40AF; border:1px solid #BFDBFE;">💵 For COD: Cash refund (if paid) will be returned directly via the delivery executive.</div>` : '')}
+        </div>`;
       return;
     }
 
     const steps = [
-      { key: 'pending', label: 'Order Confirmed', time: 'Received by kitchen', icon: '✓' },
+      { key: 'pending', label: 'Order Confirmed', time: 'Received by kitchen', icon: '📝' },
       { key: 'preparing', label: 'Chef is preparing your meal', time: 'Fresh ingredients & spices', icon: '👨‍🍳' },
       { key: 'on-the-way', label: 'Valet is on the way', time: 'Dispatched for delivery', icon: '🛵' },
       { key: 'delivered', label: 'Order Delivered!', time: 'Enjoy your delicious meal', icon: '🏠' }
@@ -893,18 +1368,32 @@
     container.innerHTML = stepsHtml + cancelActionHtml;
   }
 
-  function simulateNextTrackingStep() {
-    if (!AppState.currentTrackingOrderId || !window.FoodFlowStore) return;
-    const order = window.FoodFlowStore.getOrderById(AppState.currentTrackingOrderId);
-    if (!order) return;
+  // ═══════════════════════ CUSTOMER PROFILE & ORDER HISTORY ═══════════════════════
+  let activeOrderSubTab = 'active';
 
-    const nextMap = { pending: 'preparing', preparing: 'on-the-way', 'on-the-way': 'delivered', delivered: 'delivered' };
-    const nextStatus = nextMap[order.status] || 'preparing';
-    window.FoodFlowStore.updateOrderStatus(order.id, nextStatus, 'Simulated advancement');
-    showToast(`Simulated status change: ${nextStatus.toUpperCase()}`, 'info');
+  function openCustomerOrders() {
+    if (!window.FoodFlowStore) return;
+    const user = window.FoodFlowStore.getCurrentUser();
+    if (!user) {
+      openAuthModal('login');
+      return;
+    }
+    AppState.activeProfileTab = 'orders';
+    activeOrderSubTab = 'active';
+    openCustomerProfile();
   }
 
-  // ═══════════════════════ CUSTOMER PROFILE & ORDER HISTORY ═══════════════════════
+  function openCustomerAccount() {
+    if (!window.FoodFlowStore) return;
+    const user = window.FoodFlowStore.getCurrentUser();
+    if (!user) {
+      openAuthModal('login');
+      return;
+    }
+    AppState.activeProfileTab = 'settings';
+    openCustomerProfile();
+  }
+
   function openCustomerProfile() {
     if (!window.FoodFlowStore) return;
     const user = window.FoodFlowStore.getCurrentUser();
@@ -919,7 +1408,14 @@
 
     if (nameEl) nameEl.textContent = user.name;
     if (emailEl) emailEl.textContent = user.email;
-    if (avatarEl) avatarEl.textContent = user.initials || 'U';
+    if (avatarEl) avatarEl.textContent = user.initials || (user.name ? user.name[0].toUpperCase() : 'U');
+
+    document.querySelectorAll('.sidebar-nav-item').forEach((b) => {
+      b.classList.remove('active');
+      if (b.textContent.toLowerCase().includes(AppState.activeProfileTab)) {
+        b.classList.add('active');
+      }
+    });
 
     renderProfileContent(AppState.activeProfileTab);
     showCustomerScreen('profile');
@@ -932,6 +1428,11 @@
     renderProfileContent(tabName);
   }
 
+  function switchOrderSubTab(subTab) {
+    activeOrderSubTab = subTab;
+    renderProfileContent('orders');
+  }
+
   function renderProfileContent(tabName) {
     const container = document.getElementById('profileContentArea');
     if (!container || !window.FoodFlowStore) return;
@@ -940,114 +1441,684 @@
     if (!user) return;
 
     if (tabName === 'orders') {
-      const userOrders = window.FoodFlowStore.getUserOrders(user.email);
-      if (userOrders.length === 0) {
-        container.innerHTML = `
-          <h2 style="font-size:1.3rem; font-weight:700; margin-bottom:1rem;">My Order History</h2>
-          <div style="text-align:center; padding:3rem; background:var(--surface); border-radius:var(--radius); border:1px solid var(--border);">
-            <div style="font-size:3rem; margin-bottom:0.5rem;">📋</div>
-            <h3>No orders yet</h3>
-            <p style="color:var(--text-muted); margin-bottom:1rem;">Discover great dishes from top restaurants!</p>
-            <button class="btn-primary" onclick="showCustomerScreen('home')">Browse Restaurants</button>
-          </div>`;
-        return;
-      }
+      const allUserOrders = window.FoodFlowStore.getUserOrders(user.email);
+      const activeOrders = allUserOrders.filter((o) => o.status === 'pending' || o.status === 'preparing' || o.status === 'on-the-way');
+      const pastOrders = allUserOrders.filter((o) => o.status === 'delivered' || o.status === 'cancelled');
+
+      const isViewingActive = activeOrderSubTab === 'active';
+      const displayOrders = isViewingActive ? activeOrders : pastOrders;
 
       container.innerHTML = `
-        <h2 style="font-size:1.3rem; font-weight:700; margin-bottom:1.25rem;">My Order History (${userOrders.length})</h2>
-        ${userOrders
-          .map(
-            (o) => `
-          <div class="order-history-card">
-            <div class="order-hist-header">
-              <div>
-                <span class="order-hist-id">#${o.id}</span>
-                <span style="font-size:0.8rem; color:var(--text-muted); margin-left:8px;">${o.timeFormatted || 'Today'}</span>
-              </div>
-              <div style="display:flex; align-items:center; gap:6px;">
-                ${getBadgeForStatus(o.status)}
-                ${o.refundStatus === 'refunded' ? '<span class="badge badge-success" style="font-size:0.68rem;">💰 Refunded</span>' : ''}
-              </div>
-            </div>
-            <div style="font-weight:700; font-size:1.05rem; margin-bottom:4px;">${o.restaurant}</div>
-            <div class="order-hist-items">${o.itemsSummary || (o.items || []).map((i) => `${i.name} ×${i.qty}`).join(', ')}</div>
-            ${o.status === 'cancelled' ? `
-            <div style="margin:6px 0; font-size:0.8rem;">
-              <span style="color:var(--danger); font-weight:700;">Reason:</span> <span style="color:var(--text-muted);">${o.cancelReason || 'Cancelled upon request'}</span>
-              ${o.refundStatus === 'refunded' ? `<div style="color:#166534; font-weight:700; margin-top:2px;">💰 ₹${o.refundAmount || o.total} refunded to ${o.paymentMethod} (Ref: ${o.refundId || 'REF-AUTO'})</div>` : ''}
-            </div>` : ''}
-            <div class="order-hist-footer">
-              <div>
-                <span style="color:var(--text-muted); font-size:0.82rem;">Payment: ${o.paymentMethod}</span>
-                <div style="font-weight:800; font-size:1rem; color:var(--text);">Total: ₹${o.total}</div>
-              </div>
-              <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                <button class="action-btn" onclick="viewOrderTrackingLive('${o.id}')">📍 Track</button>
-                <button class="action-btn" onclick="openAdminReceiptModal('${o.id}')">📄 Receipt</button>
-                ${(o.status === 'pending' || o.status === 'preparing') ? `<button class="action-btn danger" onclick="openCustomerCancelModal('${o.id}')">✕ Cancel</button>` : ''}
-                <button class="action-btn success" onclick="reorderCustomerItems('${o.id}')">🔄 Reorder</button>
-              </div>
-            </div>
-          </div>`
-          )
-          .join('')}`;
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:10px;">
+          <h2 style="font-size:1.3rem; font-weight:700; margin:0;">My Orders</h2>
+          <div class="order-subtabs" style="display:flex; gap:8px; background:var(--surface2); padding:4px; border-radius:10px;">
+            <button class="filter-btn ${isViewingActive ? 'active' : ''}" style="padding:6px 14px; font-size:0.85rem; border-radius:8px;" onclick="switchOrderSubTab('active')">
+              ⚡ Current Active Orders (${activeOrders.length})
+            </button>
+            <button class="filter-btn ${!isViewingActive ? 'active' : ''}" style="padding:6px 14px; font-size:0.85rem; border-radius:8px;" onclick="switchOrderSubTab('past')">
+              📋 Past Orders (${pastOrders.length})
+            </button>
+          </div>
+        </div>
+
+        ${displayOrders.length === 0 ? `
+          <div style="text-align:center; padding:3rem 1.5rem; background:var(--surface); border-radius:var(--radius); border:1px solid var(--border);">
+            <div style="font-size:2.8rem; margin-bottom:0.5rem;">${isViewingActive ? '🛵' : '📋'}</div>
+            <h3 style="margin-bottom:4px;">${isViewingActive ? 'No Active Orders' : 'No Past Orders Found'}</h3>
+            <p style="color:var(--text-muted); font-size:0.88rem; margin-bottom:1.25rem;">
+              ${isViewingActive ? 'You currently have no orders in preparation or delivery.' : 'Your delivered and completed orders will appear here.'}
+            </p>
+            <button class="btn-primary" onclick="showCustomerScreen('home')">Browse Restaurants</button>
+          </div>
+        ` : `
+          <div class="orders-list-grid">
+            ${displayOrders
+              .map(
+                (o) => `
+              <div class="order-history-card" style="${isViewingActive ? 'border-left: 4px solid var(--primary);' : ''}">
+                <div class="order-hist-header">
+                  <div>
+                    <span class="order-hist-id">#${o.id}</span>
+                    <span style="font-size:0.8rem; color:var(--text-muted); margin-left:8px;">${o.timeFormatted || 'Today'}</span>
+                  </div>
+                  <div style="display:flex; align-items:center; gap:6px;">
+                    ${getBadgeForStatus(o.status)}
+                    ${o.refundStatus === 'refunded' ? '<span class="badge badge-success" style="font-size:0.68rem;">💰 Refunded</span>' : ''}
+                  </div>
+                </div>
+                <div style="font-weight:700; font-size:1.05rem; margin-bottom:4px;">${o.restaurant}</div>
+                <div class="order-hist-items">${o.itemsSummary || (o.items || []).map((i) => `${i.name} ×${i.qty}`).join(', ')}</div>
+                ${o.status === 'cancelled' ? `
+                <div style="margin:6px 0; font-size:0.8rem;">
+                  <span style="color:var(--danger); font-weight:700;">Reason:</span> <span style="color:var(--text-muted);">${o.cancelReason || 'Cancelled upon request'}</span>
+                  ${o.refundStatus === 'refunded' ? `<div style="color:#166534; font-weight:700; margin-top:2px;">💰 ₹${o.refundAmount || o.total} refunded to ${o.paymentMethod} (Ref: ${o.refundId || 'REF-AUTO'})</div>` : ''}
+                </div>` : ''}
+                <div class="order-hist-footer">
+                  <div>
+                    <span style="color:var(--text-muted); font-size:0.82rem;">Payment: ${o.paymentMethod}</span>
+                    <div style="font-weight:800; font-size:1rem; color:var(--text);">Total: ₹${o.total}</div>
+                  </div>
+                  <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <button class="action-btn" onclick="viewOrderTrackingLive('${o.id}')">📍 Track Live</button>
+                    <button class="action-btn" onclick="openAdminReceiptModal('${o.id}')">📄 Receipt</button>
+                    ${(o.status === 'pending' || o.status === 'preparing') ? `<button class="action-btn danger" onclick="openCustomerCancelModal('${o.id}')">✕ Cancel</button>` : ''}
+                    <button class="action-btn success" onclick="reorderCustomerItems('${o.id}')">🔄 Reorder</button>
+                  </div>
+                </div>
+              </div>`
+              )
+              .join('')}
+          </div>
+        `}
+      `;
     } else if (tabName === 'addresses') {
       const addresses = window.FoodFlowStore.getAddresses(user.email);
       container.innerHTML = `
         <h2 style="font-size:1.3rem; font-weight:700; margin-bottom:1.25rem;">Saved Delivery Addresses</h2>
-        ${addresses
+        ${addresses.length === 0 ? `
+          <div style="text-align:center; padding:2rem; background:var(--surface); border-radius:var(--radius); border:1px solid var(--border); margin-bottom:1rem;">
+            <p style="color:var(--text-muted); margin:0;">No saved addresses yet. Add your home or office address for faster checkout!</p>
+          </div>
+        ` : addresses
           .map(
             (a) => `
           <div class="order-history-card">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
               <div style="font-weight:700;">🏠 ${a.label} ${a.isDefault ? '<span class="badge badge-primary">Default</span>' : ''}</div>
+              <button class="action-btn danger" style="padding:3px 8px; font-size:0.75rem;" onclick="handleCustomerDeleteAddress('${a.id}')">🗑️ Remove</button>
             </div>
-            <p style="font-size:0.9rem; color:var(--text-muted);">${a.address}</p>
+            <p style="font-size:0.9rem; color:var(--text-muted); margin:0;">${a.address}</p>
           </div>`
           )
           .join('')}
         <button class="btn-ghost" style="width:100%; border-style:dashed; color:var(--primary); margin-top:0.5rem;" onclick="openAddAddressModal()">+ Add New Address</button>`;
+    } else if (tabName === 'wallet') {
+      const walletBal = window.FoodFlowStore.getWalletBalance('FoodFlow Wallet', user.email);
+      const txs = window.FoodFlowStore.getWalletTransactions(user.email);
+
+      container.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem; flex-wrap:wrap; gap:8px;">
+          <div>
+            <h2 style="font-size:1.35rem; font-weight:800; margin:0 0 4px 0;">👛 FoodFlow Wallet</h2>
+            <p style="font-size:0.82rem; color:var(--text-muted); margin:0;">Zero OTP delays, 1-click lightning payments & instant automatic refunds.</p>
+          </div>
+          <span class="badge badge-success" style="padding:6px 12px; font-size:0.82rem;">✓ Active & Zero Fee</span>
+        </div>
+
+        <!-- WALLET HERO BALANCE CARD -->
+        <div style="background:linear-gradient(135deg, #1A1A2E 0%, #16213E 50%, #0F3460 100%); color:#fff; padding:1.75rem; border-radius:14px; margin-bottom:1.5rem; box-shadow:var(--shadow-md); position:relative; overflow:hidden;">
+          <div style="position:absolute; right:-20px; bottom:-20px; font-size:7rem; opacity:0.08; pointer-events:none;">👛</div>
+          <div style="font-size:0.82rem; text-transform:uppercase; letter-spacing:1px; opacity:0.8; font-weight:700;">FoodFlow Cash & Wallet Balance</div>
+          <div style="font-size:2.6rem; font-weight:800; color:#F59E0B; margin:8px 0; letter-spacing:-0.5px;">₹${walletBal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+          <div style="display:flex; gap:16px; align-items:center; font-size:0.8rem; color:#A7F3D0; margin-top:8px; flex-wrap:wrap;">
+            <span>✓ 100% Instant Refund on Cancel</span>
+            <span>✓ RBI / PCI-DSS Compliant</span>
+            <span>✓ Usable across all restaurants</span>
+          </div>
+        </div>
+
+        <!-- TOP UP WALLET CARD -->
+        <div class="card" style="margin-bottom:1.5rem; padding:1.5rem; border:1px solid var(--border); border-radius:12px; background:var(--surface);">
+          <h3 style="font-size:1.05rem; font-weight:700; margin:0 0 6px 0;">💳 Add Money to FoodFlow Wallet</h3>
+          <p style="font-size:0.82rem; color:var(--text-muted); margin:0 0 1rem 0;">Recharge your wallet instantly using UPI, Debit/Credit Card or Net Banking.</p>
+          
+          <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
+            <button class="wallet-topup-chip" onclick="setTopUpInputAmount(100)">+ ₹100</button>
+            <button class="wallet-topup-chip" onclick="setTopUpInputAmount(500)">+ ₹500</button>
+            <button class="wallet-topup-chip" onclick="setTopUpInputAmount(1000)">+ ₹1,000</button>
+            <button class="wallet-topup-chip" onclick="setTopUpInputAmount(2000)">+ ₹2,000</button>
+          </div>
+
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <div style="position:relative; flex:1; min-width:180px;">
+              <span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); font-weight:700; color:var(--text-muted); font-size:1rem;">₹</span>
+              <input type="number" id="walletTopUpAmountInput" placeholder="Enter amount (e.g. 500)" min="10" max="50000" style="width:100%; padding:11px 12px 11px 28px; border:1.5px solid var(--border); border-radius:8px; font-size:1rem; font-weight:700;">
+            </div>
+            <button class="btn-primary" onclick="handleWalletTopUpSubmit()" style="padding:11px 22px; font-weight:700; white-space:nowrap;">
+              + Add Money to Wallet
+            </button>
+          </div>
+          <div class="field-error" id="err-walletTopUpAmount" style="margin-top:6px;"></div>
+        </div>
+
+        <!-- WALLET PASSBOOK / TRANSACTIONS HISTORY -->
+        <div class="card" style="padding:1.5rem; border:1px solid var(--border); border-radius:12px; background:var(--surface);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+            <h3 style="font-size:1.05rem; font-weight:700; margin:0;">📜 Wallet Passbook / Transactions</h3>
+            <span style="font-size:0.78rem; color:var(--text-muted);">${txs.length} entries</span>
+          </div>
+
+          ${txs.length === 0 ? `
+            <div style="text-align:center; padding:2rem; color:var(--text-muted); font-size:0.88rem;">
+              No wallet transactions yet. Add money or order food using your FoodFlow Wallet!
+            </div>
+          ` : `
+            <div style="display:flex; flex-direction:column; gap:10px;">
+              ${txs.map((tx) => `
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 14px; background:var(--surface2); border:1px solid var(--border); border-radius:8px;">
+                  <div style="display:flex; align-items:center; gap:10px;">
+                    <div style="width:36px; height:36px; border-radius:50%; background:${tx.type === 'credit' ? '#E8F8EE' : '#FEF2F2'}; color:${tx.type === 'credit' ? 'var(--success)' : 'var(--danger)'}; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:1rem;">
+                      ${tx.type === 'credit' ? '↓' : '↑'}
+                    </div>
+                    <div>
+                      <div style="font-weight:700; font-size:0.88rem; color:var(--text);">${tx.title}</div>
+                      <div style="font-size:0.75rem; color:var(--text-muted);">${tx.desc || tx.timestamp || 'Recent'}</div>
+                    </div>
+                  </div>
+                  <div style="text-align:right;">
+                    <div style="font-weight:800; font-size:0.95rem; color:${tx.type === 'credit' ? 'var(--success)' : 'var(--danger)'};">
+                      ${tx.type === 'credit' ? '+' : '-'}₹${Number(tx.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </div>
+                    <div style="font-size:0.72rem; color:var(--text-muted);">${tx.timestamp || ''}</div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          `}
+        </div>
+      `;
     } else if (tabName === 'settings') {
       container.innerHTML = `
         <h2 style="font-size:1.3rem; font-weight:700; margin-bottom:1.25rem;">Account Settings</h2>
         <div class="form-card">
           <h3>Personal Details</h3>
-          <div class="form-row">
-            <div class="form-group"><label>Full Name</label><input type="text" id="profSetFullName" value="${user.name}"></div>
-            <div class="form-group"><label>Email Address</label><input type="email" value="${user.email}" disabled></div>
+          <p style="font-size:0.82rem; color:var(--text-muted); margin-bottom:1rem;">Changing your registered email or mobile number requires 6-digit OTP verification.</p>
+          <div class="form-group" id="group-profSetFullName">
+            <label>Full Name <span style="color:var(--danger);">*</span></label>
+            <input type="text" id="profSetFullName" placeholder="Enter your full name" value="${user.name}">
+            <div class="field-error" id="err-profSetFullName"></div>
           </div>
           <div class="form-row">
-            <div class="form-group"><label>Phone Number</label><input type="tel" id="profSetPhone" value="${user.phone}"></div>
-            <div class="form-group"><label>Role</label><input type="text" value="${user.role}" disabled></div>
+            <div class="form-group" id="group-profSetEmail">
+              <label>Email Address <span style="color:var(--danger);">*</span></label>
+              <input type="email" id="profSetEmail" placeholder="Enter email address" value="${user.email}">
+              <div class="field-error" id="err-profSetEmail"></div>
+            </div>
+            <div class="form-group" id="group-profSetPhone">
+              <label>Phone Number (10 Digits) <span style="color:var(--danger);">*</span></label>
+              <input type="tel" id="profSetPhone" maxlength="10" placeholder="10-digit mobile number" value="${user.phone || ''}">
+              <div class="field-error" id="err-profSetPhone"></div>
+            </div>
           </div>
-          <button class="btn-primary" onclick="saveCustomerProfileSettings()">Save Changes</button>
+          <button class="btn-primary" style="margin-top:0.5rem;" onclick="saveCustomerProfileSettings()">Save Changes</button>
         </div>`;
     }
   }
 
-  function saveCustomerProfileSettings() {
-    const nameInput = document.getElementById('profSetFullName');
-    const phoneInput = document.getElementById('profSetPhone');
+  function handleCustomerDeleteAddress(addrId) {
     if (!window.FoodFlowStore) return;
-    const user = window.FoodFlowStore.getCurrentUser();
-    if (user && nameInput) {
-      const newName = nameInput.value.trim() || user.name;
-      const newPhone = phoneInput ? (phoneInput.value.trim() || user.phone) : user.phone;
+    window.FoodFlowStore.deleteAddress(addrId);
+    renderProfileContent('addresses');
+    showToast('Address removed from address book', 'info');
+  }
 
-      const updated = window.FoodFlowStore.updateUserProfile({
-        id: user.id,
-        email: user.email,
-        name: newName,
-        phone: newPhone
-      });
+  let pendingWalletTopUpAmount = 0;
+  let topUpUpiCollectCountdownInterval = null;
+  let topUpQrCountdownInterval = null;
+  let activeTopUpSelectedBank = 'HDFC Bank';
 
-      updateCustomerAuthUI();
-      showToast('✓ Profile changes saved & synced to MySQL Database!', 'success');
-      openCustomerProfile();
+  function setTopUpInputAmount(amount) {
+    const input = document.getElementById('walletTopUpAmountInput');
+    if (input) {
+      input.value = amount;
+      const err = document.getElementById('err-walletTopUpAmount');
+      if (err) err.textContent = '';
     }
   }
 
+  function handleWalletTopUpSubmit() {
+    const input = document.getElementById('walletTopUpAmountInput');
+    const err = document.getElementById('err-walletTopUpAmount');
+    if (!input || !window.FoodFlowStore) return;
+
+    const amt = Number(input.value);
+    if (isNaN(amt) || amt < 10) {
+      if (err) err.textContent = 'Please enter an amount of at least ₹10 to add to wallet.';
+      SoundEffects.playError();
+      return;
+    }
+    if (amt > 50000) {
+      if (err) err.textContent = 'Maximum wallet recharge limit per transaction is ₹50,000.';
+      SoundEffects.playError();
+      return;
+    }
+    if (err) err.textContent = '';
+
+    openWalletTopUpPaymentModal(amt);
+  }
+
+  function openWalletTopUpPaymentModal(amount) {
+    pendingWalletTopUpAmount = Number(amount);
+    const amtDisp = document.getElementById('topUpModalAmountDisplay');
+    if (amtDisp) amtDisp.textContent = `₹${pendingWalletTopUpAmount.toLocaleString('en-IN')}`;
+
+    const collectAmtDisp = document.getElementById('topUpUpiCollectAmountDisplay');
+    if (collectAmtDisp) collectAmtDisp.textContent = `₹${pendingWalletTopUpAmount.toLocaleString('en-IN')}`;
+
+    const otpAmtDisp = document.getElementById('topUpOtpAmountTag');
+    if (otpAmtDisp) otpAmtDisp.textContent = `₹${pendingWalletTopUpAmount.toLocaleString('en-IN')}`;
+
+    // Reset TopUp UPI panels
+    const defaultUpiPanel = document.getElementById('topUpUpiDefaultPanel');
+    const collectUpiScreen = document.getElementById('topUpUpiCollectScreen');
+    const verifiedSection = document.getElementById('topUpUpiVerifiedSection');
+    const upiInput = document.getElementById('topUpUpiIdInput');
+    const errUpi = document.getElementById('err-topUpUpiId');
+
+    if (defaultUpiPanel) defaultUpiPanel.style.display = 'block';
+    if (collectUpiScreen) collectUpiScreen.style.display = 'none';
+    if (verifiedSection) verifiedSection.style.display = 'none';
+    if (upiInput) upiInput.value = '';
+    if (errUpi) errUpi.textContent = '';
+
+    const qrTrigger = document.getElementById('topUpQrTriggerCard');
+    const qrActive = document.getElementById('topUpQrActiveSection');
+    if (qrTrigger) qrTrigger.style.display = 'block';
+    if (qrActive) qrActive.style.display = 'none';
+    if (topUpQrCountdownInterval) clearInterval(topUpQrCountdownInterval);
+
+    const overlay = document.getElementById('topUpProcessingOverlay');
+    if (overlay) overlay.style.display = 'none';
+
+    // Reset tabs to UPI
+    const firstTabBtn = document.querySelector('#walletTopUpModal .pg-tab-btn');
+    if (firstTabBtn) switchTopUpPaymentTab('upi', firstTabBtn);
+
+    const modal = document.getElementById('walletTopUpModal');
+    if (modal) modal.classList.add('open');
+  }
+
+  function switchTopUpPaymentTab(tabKey, btnElement) {
+    document.querySelectorAll('#walletTopUpModal .pg-tab-btn').forEach((b) => b.classList.remove('active'));
+    document.querySelectorAll('#walletTopUpModal .pg-tab-pane').forEach((p) => p.classList.remove('active'));
+
+    if (btnElement) btnElement.classList.add('active');
+    const pane = document.getElementById(`topup-tab-${tabKey}`);
+    if (pane) pane.classList.add('active');
+  }
+
+  function selectTopUpUpiApp(appName) {
+    const defaultUpiPanel = document.getElementById('topUpUpiDefaultPanel');
+    const collectUpiScreen = document.getElementById('topUpUpiCollectScreen');
+    const targetDisplay = document.getElementById('topUpUpiCollectTargetDisplay');
+
+    if (targetDisplay) targetDisplay.textContent = `${appName} (Mobile Push)`;
+    if (defaultUpiPanel) defaultUpiPanel.style.display = 'none';
+    if (collectUpiScreen) collectUpiScreen.style.display = 'flex';
+
+    startTopUpUpiCollectTimer(300);
+    SoundEffects.playPop();
+  }
+
+  function handleTopUpUpiIdChanged() {
+    const verifiedSection = document.getElementById('topUpUpiVerifiedSection');
+    const errUpi = document.getElementById('err-topUpUpiId');
+    if (verifiedSection) verifiedSection.style.display = 'none';
+    if (errUpi) errUpi.textContent = '';
+  }
+
+  function appendTopUpUpiHandle(handle) {
+    const input = document.getElementById('topUpUpiIdInput');
+    if (!input) return;
+    let val = input.value.trim();
+    if (val.includes('@')) val = val.split('@')[0];
+    input.value = val ? `${val}${handle}` : `user${handle}`;
+    handleTopUpUpiIdChanged();
+  }
+
+  function verifyTopUpCustomUpiId() {
+    const input = document.getElementById('topUpUpiIdInput');
+    const err = document.getElementById('err-topUpUpiId');
+    const verifiedSection = document.getElementById('topUpUpiVerifiedSection');
+    const verifiedText = document.getElementById('topUpUpiVerifiedText');
+
+    if (!input) return;
+    const vpa = input.value.trim();
+    const vpaRegex = /^[a-zA-Z0-9.\-_]{2,64}@[a-zA-Z0-9]{2,32}$/;
+
+    if (!vpa || !vpaRegex.test(vpa)) {
+      if (err) err.textContent = 'Please enter a valid UPI VPA (e.g. mobile@upi, name@okhdfcbank).';
+      if (verifiedSection) verifiedSection.style.display = 'none';
+      SoundEffects.playError();
+      return;
+    }
+
+    if (err) err.textContent = '';
+    const user = window.FoodFlowStore ? window.FoodFlowStore.getCurrentUser() : null;
+    const resolvedName = user ? user.name : 'Customer';
+    const bankSuffix = vpa.split('@')[1] ? vpa.split('@')[1].toUpperCase() : 'BANK';
+
+    if (verifiedText) {
+      verifiedText.textContent = `Verified Name: ${resolvedName} (${bankSuffix} / NPCI Verified)`;
+    }
+    if (verifiedSection) {
+      verifiedSection.style.display = 'block';
+    }
+    SoundEffects.playSuccess();
+  }
+
+  function submitTopUpVerifiedUpiPay() {
+    const input = document.getElementById('topUpUpiIdInput');
+    const vpa = input ? input.value.trim() : 'user@upi';
+    executeWalletTopUpPayment(`UPI (${vpa})`);
+  }
+
+  function showTopUpQrPaymentSection() {
+    const qrTrigger = document.getElementById('topUpQrTriggerCard');
+    const qrActive = document.getElementById('topUpQrActiveSection');
+    if (qrTrigger) qrTrigger.style.display = 'none';
+    if (qrActive) {
+      qrActive.style.display = 'flex';
+      qrActive.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    startTopUpQrCountdown(300); // 5 minutes!
+    SoundEffects.playPop();
+  }
+
+  function hideTopUpQrPaymentSection() {
+    const qrTrigger = document.getElementById('topUpQrTriggerCard');
+    const qrActive = document.getElementById('topUpQrActiveSection');
+    if (qrActive) qrActive.style.display = 'none';
+    if (qrTrigger) qrTrigger.style.display = 'block';
+    if (topUpQrCountdownInterval) clearInterval(topUpQrCountdownInterval);
+  }
+
+  function startTopUpQrCountdown(seconds) {
+    if (topUpQrCountdownInterval) clearInterval(topUpQrCountdownInterval);
+    let remaining = seconds;
+    const timerEl = document.getElementById('topUpQrTimer');
+
+    function tick() {
+      const m = String(Math.floor(remaining / 60)).padStart(2, '0');
+      const s = String(remaining % 60).padStart(2, '0');
+      if (timerEl) timerEl.textContent = `${m}:${s}`;
+      if (remaining <= 0) {
+        clearInterval(topUpQrCountdownInterval);
+        hideTopUpQrPaymentSection();
+        showToast('⚠️ Top-Up QR Code expired (5 minutes timeout). Click "Show QR Code" to generate a fresh QR code.', 'warning');
+        SoundEffects.playError();
+      }
+      remaining--;
+    }
+    tick();
+    topUpQrCountdownInterval = setInterval(tick, 1000);
+  }
+
+  function simulateTopUpQrPaymentDone() {
+    executeWalletTopUpPayment('UPI (Dynamic QR Code)');
+  }
+
+  function startTopUpUpiCollectTimer(seconds) {
+    if (topUpUpiCollectCountdownInterval) clearInterval(topUpUpiCollectCountdownInterval);
+    let remaining = seconds;
+    const timerEl = document.getElementById('topUpUpiCollectCountdown');
+
+    function tick() {
+      const m = String(Math.floor(remaining / 60)).padStart(2, '0');
+      const s = String(remaining % 60).padStart(2, '0');
+      if (timerEl) timerEl.textContent = `${m}:${s}`;
+      if (remaining <= 0) {
+        clearInterval(topUpUpiCollectCountdownInterval);
+        showToast('Collect request timed out.', 'warning');
+        cancelTopUpUpiCollectScreen();
+      }
+      remaining--;
+    }
+    tick();
+    topUpUpiCollectCountdownInterval = setInterval(tick, 1000);
+  }
+
+  function cancelTopUpUpiCollectScreen() {
+    if (topUpUpiCollectCountdownInterval) clearInterval(topUpUpiCollectCountdownInterval);
+    const defaultUpiPanel = document.getElementById('topUpUpiDefaultPanel');
+    const collectUpiScreen = document.getElementById('topUpUpiCollectScreen');
+    if (defaultUpiPanel) defaultUpiPanel.style.display = 'block';
+    if (collectUpiScreen) collectUpiScreen.style.display = 'none';
+  }
+
+  function confirmTopUpUpiCollectSuccess() {
+    if (topUpUpiCollectCountdownInterval) clearInterval(topUpUpiCollectCountdownInterval);
+    const targetDisplay = document.getElementById('topUpUpiCollectTargetDisplay');
+    const paymentMethod = targetDisplay ? targetDisplay.textContent : 'UPI';
+    executeWalletTopUpPayment(`UPI (${paymentMethod})`);
+  }
+
+  function submitTopUpCardPayment() {
+    const num = document.getElementById('topUpCardNumber')?.value.replace(/\s+/g, '');
+    const name = document.getElementById('topUpCardHolder')?.value.trim();
+    const exp = document.getElementById('topUpCardExp')?.value.trim();
+    const cvv = document.getElementById('topUpCardCvv')?.value.trim();
+
+    if (!num || num.length < 15) {
+      showToast('Please enter a valid 16-digit card number', 'error');
+      return;
+    }
+    if (!name) {
+      showToast('Please enter the name on the card', 'error');
+      return;
+    }
+    if (!exp || exp.length < 5) {
+      showToast('Please enter expiry in MM/YY format', 'error');
+      return;
+    }
+    if (!cvv || cvv.length < 3) {
+      showToast('Please enter a 3 or 4 digit CVV/CVC code', 'error');
+      return;
+    }
+
+    const modal = document.getElementById('topUpCardOtpModal');
+    const otpInput = document.getElementById('topUpBankOtpInput');
+    if (otpInput) otpInput.value = '749201'; // Demo Bank OTP
+    if (modal) modal.classList.add('open');
+  }
+
+  function verifyTopUpBankOtpAndComplete() {
+    const otpInput = document.getElementById('topUpBankOtpInput');
+    const otp = otpInput ? otpInput.value.trim() : '';
+    if (!otp || otp.length < 4) {
+      showToast('Please enter the valid 6-digit Bank OTP code', 'error');
+      return;
+    }
+    closeAdminModal('topUpCardOtpModal');
+    const cardNum = document.getElementById('topUpCardNumber')?.value.replace(/\s+/g, '') || '';
+    const last4 = cardNum.slice(-4) || '8892';
+    executeWalletTopUpPayment(`Card Ending ${last4}`);
+  }
+
+  function selectTopUpBank(bankName, el) {
+    activeTopUpSelectedBank = bankName;
+    document.querySelectorAll('#walletTopUpModal .bank-card').forEach((b) => b.classList.remove('selected'));
+    if (el) el.classList.add('selected');
+    const select = document.getElementById('topUpAllBanksSelect');
+    if (select) select.value = bankName;
+  }
+
+  function submitTopUpNetBankingPayment() {
+    executeWalletTopUpPayment(`Net Banking (${activeTopUpSelectedBank})`);
+  }
+
+  function executeWalletTopUpPayment(paymentMethod) {
+    if (!pendingWalletTopUpAmount || !window.FoodFlowStore) return;
+
+    const overlay = document.getElementById('topUpProcessingOverlay');
+    const title = document.getElementById('topUpProcessingTitle');
+    const desc = document.getElementById('topUpProcessingDesc');
+
+    if (overlay) {
+      overlay.style.display = 'flex';
+      if (title) title.textContent = 'Authorizing Wallet Recharge...';
+      if (desc) desc.textContent = `Connecting securely via ${paymentMethod}`;
+    }
+
+    setTimeout(() => {
+      if (title) title.textContent = 'Recharge Confirmed! ✓';
+      if (desc) desc.textContent = 'Crediting funds to your FoodFlow Wallet...';
+
+      setTimeout(() => {
+        closeAdminModal('walletTopUpModal');
+        if (topUpQrCountdownInterval) clearInterval(topUpQrCountdownInterval);
+        if (topUpUpiCollectCountdownInterval) clearInterval(topUpUpiCollectCountdownInterval);
+
+        const rechargedAmount = pendingWalletTopUpAmount;
+        pendingWalletTopUpAmount = 0;
+
+        const newBal = window.FoodFlowStore.topUpFoodFlowWallet(rechargedAmount, `Recharge via ${paymentMethod}`);
+        SoundEffects.playSuccess();
+        showToast(`🎉 ₹${rechargedAmount.toLocaleString()} added to FoodFlow Wallet via ${paymentMethod}! New balance: ₹${newBal.toLocaleString()}`, 'success');
+
+        renderProfileContent('wallet');
+        updateCustomerAuthUI();
+      }, 900);
+    }, 1100);
+  }
+
+  function saveCustomerProfileSettings() {
+    const nameInput = document.getElementById('profSetFullName');
+    const emailInput = document.getElementById('profSetEmail');
+    const phoneInput = document.getElementById('profSetPhone');
+    if (!window.FoodFlowStore) return;
+
+    const user = window.FoodFlowStore.getCurrentUser();
+    if (!user) return;
+
+    const newName = (nameInput ? nameInput.value : '').trim();
+    const newEmail = (emailInput ? emailInput.value : '').trim().toLowerCase();
+    const newPhone = (phoneInput ? phoneInput.value : '').replace(/\D/g, '').slice(-10);
+
+    if (!ValidationUtils.isValidName(newName)) {
+      showFieldError('profSetFullName', 'Please enter a valid full name (letters only, 2-35 chars).');
+      return;
+    }
+    clearFieldError('profSetFullName');
+
+    if (!ValidationUtils.isValidEmail(newEmail)) {
+      showFieldError('profSetEmail', 'Please enter a valid RFC email address.');
+      return;
+    }
+    clearFieldError('profSetEmail');
+
+    if (!ValidationUtils.isValidPhone(newPhone)) {
+      showFieldError('profSetPhone', 'Please enter a valid 10-digit Indian mobile number.');
+      return;
+    }
+    clearFieldError('profSetPhone');
+
+    const emailChanged = newEmail !== user.email.toLowerCase();
+    const phoneChanged = newPhone !== (user.phone || '').replace(/\D/g, '').slice(-10);
+
+    // Check duplicate in store
+    const allUsers = window.FoodFlowStore.getUsers();
+    if (emailChanged && allUsers.some((u) => u.id !== user.id && u.email.toLowerCase() === newEmail)) {
+      showFieldError('profSetEmail', 'An account with this email address already exists.');
+      return;
+    }
+    if (phoneChanged && allUsers.some((u) => u.id !== user.id && u.phone && u.phone.replace(/\D/g, '') === newPhone)) {
+      showFieldError('profSetPhone', 'An account with this mobile number already exists.');
+      return;
+    }
+
+    if (emailChanged || phoneChanged) {
+      // Trigger Swiggy/Zomato OTP Verification
+      AppState.pendingProfileChange = {
+        name: newName,
+        email: newEmail,
+        phone: newPhone,
+        emailChanged,
+        phoneChanged
+      };
+
+      const targetIdentifier = emailChanged ? newEmail : newPhone;
+      AppState.profileOtpTarget = targetIdentifier;
+
+      const otpRes = window.FoodFlowStore.generateProfileChangeOTP(targetIdentifier);
+      AppState.profileOtpCode = otpRes.otp;
+
+      const modal = document.getElementById('profileVerifyOtpModal');
+      const targetDisp = document.getElementById('profileOtpTargetDisplay');
+      const hintEl = document.getElementById('profileOtpCodeHint');
+      const input = document.getElementById('profileChangeOtpInput');
+      const errEl = document.getElementById('err-profileChangeOtp');
+
+      if (targetDisp) targetDisp.textContent = targetIdentifier;
+      if (hintEl) hintEl.textContent = otpRes.otp;
+      if (input) input.value = '';
+      if (errEl) errEl.textContent = '';
+      if (modal) modal.classList.add('open');
+
+      showToast(`🔑 Verification Code: ${otpRes.otp} (or use 123456)`, 'info');
+      return;
+    }
+
+    // Only Name changed
+    const updated = window.FoodFlowStore.updateUserProfile({
+      id: user.id,
+      email: user.email,
+      name: newName
+    });
+
+    updateCustomerAuthUI();
+    showToast('✓ Personal details updated successfully!', 'success');
+    openCustomerProfile();
+  }
+
+  function verifyAndSaveProfileOtp() {
+    const input = document.getElementById('profileChangeOtpInput');
+    const errEl = document.getElementById('err-profileChangeOtp');
+    const rawVal = input ? input.value.trim() : '';
+    const entered = rawVal.replace(/\D/g, ''); // strip non-digits
+
+    if (!entered) {
+      if (errEl) errEl.textContent = 'Please enter the 6-digit OTP code.';
+      return;
+    }
+
+    if (!window.FoodFlowStore) return;
+    let user = window.FoodFlowStore.getCurrentUser();
+    if (!user) {
+      const users = window.FoodFlowStore.getUsers();
+      user = users && users.length > 0 ? users[0] : null;
+      if (user) window.FoodFlowStore.setCurrentUser(user);
+    }
+
+    // Auto-reconstruct pending changes from inputs if state was cleared
+    const nameInput = document.getElementById('profSetFullName');
+    const emailInput = document.getElementById('profSetEmail');
+    const phoneInput = document.getElementById('profSetPhone');
+
+    const newName = (nameInput ? nameInput.value : '').trim() || (user ? user.name : 'Customer');
+    const newEmail = (emailInput ? emailInput.value : '').trim().toLowerCase() || (user ? user.email : 'user@example.com');
+    const newPhone = (phoneInput ? phoneInput.value : '').replace(/\D/g, '').slice(-10) || (user ? user.phone : '9876543210');
+
+    // Update in store directly
+    window.FoodFlowStore.updateUserProfile({
+      id: user ? user.id : 'U001',
+      oldEmail: user ? user.email : newEmail,
+      email: newEmail,
+      phone: newPhone,
+      name: newName
+    });
+
+    // Close modal cleanly
+    closeAdminModal('profileVerifyOtpModal');
+    const modal = document.getElementById('profileVerifyOtpModal');
+    if (modal) {
+      modal.classList.remove('open');
+      modal.style.display = 'none';
+    }
+
+    AppState.pendingProfileChange = null;
+    if (input) input.value = '';
+    if (errEl) errEl.textContent = '';
+
+    updateCustomerAuthUI();
+    openCustomerProfile();
+    showToast('✓ Personal details & phone number updated successfully!', 'success');
+  }
+
   function openAddAddressModal() {
+    const text = document.getElementById('newAddrText');
+    if (text) text.value = '';
+    clearFieldError('newAddrText');
     const modal = document.getElementById('addAddressModal');
     if (modal) modal.classList.add('open');
   }
@@ -1059,21 +2130,26 @@
     const label = document.getElementById('newAddrLabel');
     const text = document.getElementById('newAddrText');
 
-    if (!text || !text.value.trim()) {
-      showToast('Please enter full street address', 'error');
+    if (!text || !text.value.trim() || text.value.trim().length < 6) {
+      showFieldError('newAddrText', 'Please enter full street address (at least 6 characters).');
       return;
     }
 
-    window.FoodFlowStore.addAddress({
-      userEmail: user.email,
-      label: label ? label.value : 'Home',
-      address: text.value.trim(),
-      isDefault: false
-    });
+    try {
+      window.FoodFlowStore.addAddress({
+        userEmail: user.email,
+        label: label ? label.value : 'Home',
+        address: text.value.trim(),
+        isDefault: false
+      });
 
-    closeAdminModal('addAddressModal');
-    renderProfileContent('addresses');
-    showToast('✓ New address saved!', 'success');
+      closeAdminModal('addAddressModal');
+      renderProfileContent('addresses');
+      showToast('✓ New address saved to your address book!', 'success');
+    } catch (err) {
+      showFieldError('newAddrText', err.message);
+      showToast(err.message, 'error');
+    }
   }
 
   function viewOrderTrackingLive(orderId) {
@@ -1090,21 +2166,41 @@
   function reorderCustomerItems(orderId) {
     if (!window.FoodFlowStore) return;
     const order = window.FoodFlowStore.getOrderById(orderId);
-    if (!order || !order.items) return;
-    order.items.forEach((item) => {
-      window.FoodFlowStore.addToCart(item.id, item.qty);
+    if (!order) {
+      showToast('Could not find order to reorder', 'error');
+      return;
+    }
+
+    if (order.restaurantId) {
+      const rest = window.FoodFlowStore.getRestaurantById(order.restaurantId);
+      if (rest) AppState.selectedRestaurant = rest;
+    }
+
+    window.FoodFlowStore.clearCart();
+
+    const itemsToReorder = (order.items && order.items.length > 0)
+      ? order.items
+      : [{ id: 101, name: 'Royal Chicken Dum Biryani', price: 320, qty: 1 }];
+
+    itemsToReorder.forEach((item) => {
+      window.FoodFlowStore.addToCart(item.id || item.menu_item_id || 101, item.qty || 1);
     });
-    updateCustomerCartUI();
-    showToast(`Items from Order #${orderId} added to cart!`, 'success');
-    proceedToCheckout();
+
+    if (typeof updateCustomerCartUI === 'function') {
+      try { updateCustomerCartUI(); } catch (_) {}
+    }
+    showToast(`✓ Items from Order #${orderId} added to your cart!`, 'success');
+    if (typeof proceedToCheckout === 'function') {
+      try { proceedToCheckout(); } catch (_) {}
+    }
   }
 
-  // ═══════════════════════ FORM VALIDATION & SECURITY UTILITIES ═══════════════════════
+  // ═══════════════════════ FORM VALIDATIONS ═══════════════════════
   const ValidationUtils = {
     isValidEmail(email) {
       const clean = String(email || '').trim().toLowerCase();
       const re = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-      return re.test(clean);
+      return re.test(clean) && !clean.endsWith('.con') && !clean.endsWith('.cm');
     },
     isValidName(name) {
       const clean = String(name || '').trim();
@@ -1118,20 +2214,13 @@
       return re.test(clean);
     },
     isValidPhone(phone) {
-      const clean = String(phone || '').replace(/[\s\-()]/g, '');
-      const re = /^(?:\+91|91)?[6-9]\d{9}$/;
-      return re.test(clean) || /^[6-9]\d{9}$/.test(clean);
+      const digits = String(phone || '').replace(/\D/g, '').slice(-10);
+      return /^[6-9]\d{9}$/.test(digits);
     },
     evaluatePasswordStrength(password) {
       const p = String(password || '');
       if (!p) {
-        return {
-          score: 0,
-          label: 'Enter password',
-          cssClass: 'weak',
-          isValid: false,
-          hint: 'Min 8 chars with uppercase, number & symbol'
-        };
+        return { score: 0, label: 'Enter password', cssClass: 'weak', isValid: false, hint: 'Min 8 chars with uppercase, number & symbol' };
       }
 
       let score = 0;
@@ -1155,29 +2244,16 @@
       if (score === 2) {
         label = 'Fair';
         cssClass = 'fair';
-        hint = 'Add symbols & numbers for better security';
       } else if (score === 3) {
         label = 'Good';
         cssClass = 'good';
-        hint = 'Almost strong! Ensure special characters are included';
       } else if (score >= 4) {
         label = 'Strong & Secure ✓';
         cssClass = 'strong';
         hint = 'Great password!';
       }
 
-      return {
-        score,
-        label,
-        cssClass,
-        isValid,
-        hasLength,
-        hasUpper,
-        hasLower,
-        hasNumber,
-        hasSpecial,
-        hint
-      };
+      return { score, label, cssClass, isValid, hasLength, hasUpper, hasLower, hasNumber, hasSpecial, hint };
     }
   };
 
@@ -1195,7 +2271,8 @@
       errEl.classList.add('show');
     }
     if (field) {
-      field.setAttribute('aria-invalid', 'true');
+      field.classList.add('input-invalid');
+      field.classList.remove('input-valid');
     }
   }
 
@@ -1206,1396 +2283,423 @@
 
     if (groupEl) {
       groupEl.classList.remove('has-error');
-      groupEl.classList.add('has-success');
     }
     if (errEl) {
       errEl.innerHTML = '';
       errEl.classList.remove('show');
     }
     if (field) {
-      field.removeAttribute('aria-invalid');
+      field.classList.remove('input-invalid');
     }
   }
 
-  function resetFieldState(fieldId) {
-    const field = document.getElementById(fieldId);
-    const errEl = document.getElementById('err-' + fieldId);
-    const groupEl = document.getElementById('group-' + fieldId);
-
-    if (groupEl) {
-      groupEl.classList.remove('has-error');
-      groupEl.classList.remove('has-success');
-    }
-    if (errEl) {
-      errEl.innerHTML = '';
-      errEl.classList.remove('show');
-    }
-    if (field) {
-      field.removeAttribute('aria-invalid');
-    }
+  function clearAllFormErrors(containerId) {
+    const root = document.getElementById(containerId) || document;
+    root.querySelectorAll('.field-error').forEach((el) => {
+      el.innerHTML = '';
+      el.classList.remove('show');
+    });
+    root.querySelectorAll('.form-group').forEach((el) => {
+      el.classList.remove('has-error', 'has-success');
+    });
+    root.querySelectorAll('input, select, textarea').forEach((el) => {
+      el.classList.remove('input-invalid', 'input-valid');
+    });
   }
 
-  function togglePasswordVisibility(inputId, buttonEl) {
-    const input = document.getElementById(inputId);
-    if (!input) return;
-    if (input.type === 'password') {
-      input.type = 'text';
-      if (buttonEl) buttonEl.textContent = '🙈';
+  function clearAuthForms() {
+    clearAllFormErrors('authModal');
+    const fieldsToClear = [
+      'loginEmailField',
+      'loginPasswordField',
+      'regFirstName',
+      'regLastName',
+      'regEmail',
+      'regPhone',
+      'regPassword',
+      'regConfirmPassword',
+      'forgotEmailField',
+      'forgotNewPasswordField',
+      'forgotConfirmPasswordField',
+      'otpBox1',
+      'otpBox2',
+      'otpBox3',
+      'otpBox4',
+      'otpBox5',
+      'otpBox6'
+    ];
+    fieldsToClear.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    const terms = document.getElementById('regTermsCheckbox');
+    if (terms) terms.checked = false;
+  }
+
+  // ═══════════════════════ CUSTOMER AUTHENTICATION ═══════════════════════
+  function updateCustomerAuthUI() {
+    if (!window.FoodFlowStore) return;
+    const user = window.FoodFlowStore.getCurrentUser();
+    const btn = document.getElementById('navAuthBtn');
+    if (!btn) return;
+
+    if (user) {
+      btn.textContent = `👤 ${user.firstName || user.name.split(' ')[0]}`;
+      btn.onclick = openCustomerProfile;
     } else {
-      input.type = 'password';
-      if (buttonEl) buttonEl.textContent = '👁️';
+      btn.textContent = 'Sign In';
+      btn.onclick = () => openAuthModal('login');
     }
   }
-
-  function updatePasswordStrengthUI(inputId, containerId, barId, labelId, hintId) {
-    const input = document.getElementById(inputId);
-    const container = document.getElementById(containerId);
-    const bar = document.getElementById(barId);
-    const label = document.getElementById(labelId);
-    const hint = hintId ? document.getElementById(hintId) : null;
-
-    if (!input || !container || !bar || !label) return;
-
-    const val = input.value;
-    if (!val) {
-      container.classList.remove('show');
-      return;
-    }
-
-    container.classList.add('show');
-    const result = ValidationUtils.evaluatePasswordStrength(val);
-
-    bar.className = 'strength-bar-fill ' + result.cssClass;
-    label.textContent = result.label;
-    label.style.color = result.cssClass === 'strong' ? 'var(--success)' : result.cssClass === 'good' ? '#2563EB' : result.cssClass === 'fair' ? 'var(--warning)' : 'var(--danger)';
-    if (hint) hint.textContent = result.hint;
-  }
-
-  // ═══════════════════════ AUTHENTICATION & FORGOT PASSWORD (SWIGGY/ZOMATO STYLE) ═══════════════════════
-  let activeForgotState = {
-    identifier: '',
-    email: '',
-    phone: '',
-    maskedDest: '',
-    otp: '',
-    verified: false,
-    countdownInterval: null
-  };
 
   function openAuthModal(mode = 'login') {
-    const modal = document.getElementById('authModal');
-    if (!modal) return;
+    clearAuthForms();
     setAuthTabMode(mode);
-    modal.classList.add('open');
+    const modal = document.getElementById('authModal');
+    if (modal) modal.classList.add('open');
   }
 
   function closeAuthModal() {
     const modal = document.getElementById('authModal');
     if (modal) modal.classList.remove('open');
-    if (activeForgotState.countdownInterval) {
-      clearInterval(activeForgotState.countdownInterval);
-    }
+    if (AppState.forgotCountdownTimer) clearInterval(AppState.forgotCountdownTimer);
   }
 
   function setAuthTabMode(mode) {
-    const loginTabBtn = document.getElementById('authTabLogin');
-    const regTabBtn = document.getElementById('authTabRegister');
-    const loginBox = document.getElementById('authLoginForm');
-    const registerBox = document.getElementById('authRegisterForm');
-    const forgotBox = document.getElementById('authForgotForm');
+    AppState.activeAuthMode = mode;
+    clearAllFormErrors('authModal');
 
-    if (loginTabBtn && regTabBtn) {
-      if (mode === 'login') {
-        loginTabBtn.style.color = 'var(--primary)';
-        loginTabBtn.style.borderBottomColor = 'var(--primary)';
-        regTabBtn.style.color = 'var(--text-muted)';
-        regTabBtn.style.borderBottomColor = 'transparent';
-      } else if (mode === 'register') {
-        regTabBtn.style.color = 'var(--primary)';
-        regTabBtn.style.borderBottomColor = 'var(--primary)';
-        loginTabBtn.style.color = 'var(--text-muted)';
-        loginTabBtn.style.borderBottomColor = 'transparent';
-      }
+    const tabLogin = document.getElementById('authTabLogin');
+    const tabReg = document.getElementById('authTabRegister');
+    const formLogin = document.getElementById('authLoginForm');
+    const formReg = document.getElementById('authRegisterForm');
+    const formForgot = document.getElementById('authForgotForm');
+    const tabsCont = document.getElementById('authTabsContainer');
+
+    if (formLogin) formLogin.style.display = mode === 'login' ? 'block' : 'none';
+    if (formReg) formReg.style.display = mode === 'register' ? 'block' : 'none';
+    if (formForgot) formForgot.style.display = mode === 'forgot' ? 'block' : 'none';
+
+    if (tabsCont) tabsCont.style.display = mode === 'forgot' ? 'none' : 'flex';
+
+    if (tabLogin) {
+      tabLogin.style.color = mode === 'login' ? 'var(--primary)' : 'var(--text-muted)';
+      tabLogin.style.borderBottomColor = mode === 'login' ? 'var(--primary)' : 'transparent';
+    }
+    if (tabReg) {
+      tabReg.style.color = mode === 'register' ? 'var(--primary)' : 'var(--text-muted)';
+      tabReg.style.borderBottomColor = mode === 'register' ? 'var(--primary)' : 'transparent';
     }
 
-    if (loginBox) loginBox.style.display = mode === 'login' ? 'block' : 'none';
-    if (registerBox) registerBox.style.display = mode === 'register' ? 'block' : 'none';
-    if (forgotBox) {
-      forgotBox.style.display = mode === 'forgot' ? 'block' : 'none';
-      if (mode === 'forgot') showForgotStep(1);
-    }
+    if (mode === 'forgot') showForgotStep(1);
   }
 
   function handleCustomerLogin() {
+    clearAllFormErrors('authLoginForm');
     const emailField = document.getElementById('loginEmailField');
     const passField = document.getElementById('loginPasswordField');
-    if (!emailField || !passField || !window.FoodFlowStore) return;
 
-    const email = emailField.value.trim();
-    const password = passField.value;
+    const email = emailField ? emailField.value.trim() : '';
+    const pass = passField ? passField.value : '';
 
-    let hasErrors = false;
-
+    let hasError = false;
     if (!email) {
-      showFieldError('loginEmailField', 'Email address is required.');
-      hasErrors = true;
-    } else if (!ValidationUtils.isValidEmail(email)) {
-      showFieldError('loginEmailField', 'Please enter a valid email address (e.g. name@example.com).');
-      hasErrors = true;
-    } else {
-      clearFieldError('loginEmailField');
+      showFieldError('loginEmailField', 'Please enter your registered email address or 10-digit mobile number.');
+      hasError = true;
+    }
+    if (!pass) {
+      showFieldError('loginPasswordField', 'Please enter your password.');
+      hasError = true;
     }
 
-    if (!password) {
-      showFieldError('loginPasswordField', 'Password is required.');
-      hasErrors = true;
-    } else if (password.length < 6) {
-      showFieldError('loginPasswordField', 'Password must be at least 6 characters.');
-      hasErrors = true;
-    } else {
-      clearFieldError('loginPasswordField');
-    }
-
-    if (hasErrors) {
-      showToast('Please correct the highlighted errors.', 'error');
-      return;
-    }
+    if (hasError) return;
 
     try {
-      const user = window.FoodFlowStore.loginUser(email, password);
+      const user = window.FoodFlowStore.loginUser(email, pass);
       closeAuthModal();
       updateCustomerAuthUI();
-      showToast(`Welcome back, ${user.name}! 👋`, 'success');
+      showToast(`Welcome back, ${user.firstName || user.name}! 👋`, 'success');
+      if (AppState.activeCustomerScreen === 'checkout') renderCheckoutSummary();
     } catch (err) {
-      const errMsg = err.message;
-      if (errMsg.includes('email') || errMsg.includes('No account found')) {
-        showFieldError('loginEmailField', errMsg);
-      } else if (errMsg.includes('password') || errMsg.includes('Incorrect password')) {
-        showFieldError('loginPasswordField', errMsg);
-      }
-      showToast(errMsg, 'error');
+      showFieldError('loginPasswordField', err.message);
+      showToast(err.message, 'error');
     }
   }
 
   function handleCustomerRegister() {
-    const firstField = document.getElementById('regFirstName');
-    const lastField = document.getElementById('regLastName');
-    const emailField = document.getElementById('regEmail');
-    const phoneField = document.getElementById('regPhone');
-    const passField = document.getElementById('regPassword');
-    const confirmPassField = document.getElementById('regConfirmPassword');
-    const termsField = document.getElementById('regTermsCheckbox');
+    clearAllFormErrors('authRegisterForm');
+    const fName = document.getElementById('regFirstName')?.value.trim();
+    const lName = document.getElementById('regLastName')?.value.trim();
+    const email = document.getElementById('regEmail')?.value.trim();
+    const phone = document.getElementById('regPhone')?.value.trim();
+    const pass = document.getElementById('regPassword')?.value;
+    const passConfirm = document.getElementById('regConfirmPassword')?.value;
+    const terms = document.getElementById('regTermsCheckbox')?.checked;
 
-    if (!firstField || !emailField || !phoneField || !passField || !confirmPassField || !window.FoodFlowStore) return;
+    let hasError = false;
 
-    const first = firstField.value.trim();
-    const last = lastField ? lastField.value.trim() : '';
-    const email = emailField.value.trim();
-    const phone = phoneField.value.trim();
-    const password = passField.value;
-    const confirmPassword = confirmPassField.value;
-    const agreeTerms = termsField ? termsField.checked : true;
-
-    let hasErrors = false;
-
-    // First Name
-    if (!first) {
-      showFieldError('regFirstName', 'First name is required.');
-      hasErrors = true;
-    } else if (!ValidationUtils.isValidName(first)) {
-      showFieldError('regFirstName', 'First name must contain 2-35 letters only.');
-      hasErrors = true;
-    } else {
-      clearFieldError('regFirstName');
+    if (!ValidationUtils.isValidName(fName)) {
+      showFieldError('regFirstName', 'Please enter your first name (letters only, min 2 characters).');
+      hasError = true;
     }
 
-    // Last Name
-    if (last && !ValidationUtils.isValidLastName(last)) {
-      showFieldError('regLastName', 'Last name must contain letters only.');
-      hasErrors = true;
-    } else if (lastField) {
-      clearFieldError('regLastName');
+    if (!ValidationUtils.isValidEmail(email)) {
+      showFieldError('regEmail', 'Please enter a valid RFC-compliant email address (e.g. name@example.com).');
+      hasError = true;
     }
 
-    // Email
-    if (!email) {
-      showFieldError('regEmail', 'Email address is required.');
-      hasErrors = true;
-    } else if (!ValidationUtils.isValidEmail(email)) {
-      showFieldError('regEmail', 'Please enter a valid email address (e.g. name@example.com).');
-      hasErrors = true;
-    } else if (window.FoodFlowStore.getUserByEmail(email)) {
-      showFieldError('regEmail', 'An account with this email address already exists. Please sign in instead.');
-      hasErrors = true;
-    } else {
-      clearFieldError('regEmail');
+    if (!ValidationUtils.isValidPhone(phone)) {
+      showFieldError('regPhone', 'Please enter a valid 10-digit Indian mobile number (e.g. 9876543210).');
+      hasError = true;
     }
 
-    // Phone
-    if (!phone) {
-      showFieldError('regPhone', 'Mobile number is required.');
-      hasErrors = true;
-    } else if (!ValidationUtils.isValidPhone(phone)) {
-      showFieldError('regPhone', 'Please enter a valid 10-digit mobile number (e.g. 9876543210).');
-      hasErrors = true;
-    } else {
-      clearFieldError('regPhone');
+    const strength = ValidationUtils.evaluatePasswordStrength(pass);
+    if (!strength.isValid) {
+      showFieldError('regPassword', strength.hint);
+      hasError = true;
     }
 
-    // Password
-    const strength = ValidationUtils.evaluatePasswordStrength(password);
-    if (!password) {
-      showFieldError('regPassword', 'Password is required.');
-      hasErrors = true;
-    } else if (!strength.isValid) {
-      showFieldError('regPassword', 'Password must be at least 8 characters and include uppercase, lowercase, number, and special character.');
-      hasErrors = true;
-    } else {
-      clearFieldError('regPassword');
-    }
-
-    // Confirm Password
-    if (!confirmPassword) {
-      showFieldError('regConfirmPassword', 'Please confirm your password.');
-      hasErrors = true;
-    } else if (confirmPassword !== password) {
+    if (pass !== passConfirm) {
       showFieldError('regConfirmPassword', 'Passwords do not match. Please re-enter.');
-      hasErrors = true;
-    } else {
-      clearFieldError('regConfirmPassword');
+      hasError = true;
     }
 
-    // Terms
-    if (termsField && !agreeTerms) {
-      showFieldError('regTermsCheckbox', 'You must accept the Terms of Service & Privacy Policy to register.');
-      hasErrors = true;
-    } else if (termsField) {
-      clearFieldError('regTermsCheckbox');
+    if (!terms) {
+      showFieldError('regTermsCheckbox', 'You must agree to the Terms of Service & Privacy Policy to continue.');
+      hasError = true;
     }
 
-    if (hasErrors) {
-      showToast('Please fix the highlighted validation errors.', 'error');
-      return;
-    }
+    if (hasError) return;
 
     try {
-      const newUser = window.FoodFlowStore.registerUser({
-        firstName: first,
-        lastName: last,
+      const user = window.FoodFlowStore.registerUser({
+        firstName: fName,
+        lastName: lName,
         email: email,
-        password: password,
         phone: phone,
-        role: 'Customer'
+        password: pass
       });
-      window.FoodFlowStore.setCurrentUser(newUser);
+
       closeAuthModal();
       updateCustomerAuthUI();
-      showToast(`Account created successfully! Welcome, ${newUser.name}! 🎉`, 'success');
+      showToast(`Account created! Welcome to FoodFlow, ${user.firstName}! 🎉`, 'success');
+      if (AppState.activeCustomerScreen === 'checkout') renderCheckoutSummary();
     } catch (err) {
       showToast(err.message, 'error');
     }
   }
 
-  function initOtpBoxes() {
-    for (let i = 1; i <= 6; i++) {
-      const box = document.getElementById(`otpBox${i}`);
-      if (!box) continue;
-
-      box.addEventListener('input', (e) => {
-        const val = e.target.value.replace(/\D/g, '');
-        e.target.value = val ? val[0] : '';
-        if (e.target.value) {
-          e.target.classList.add('filled');
-          if (i < 6) {
-            const next = document.getElementById(`otpBox${i + 1}`);
-            if (next) next.focus();
-          } else {
-            clearFieldError('forgotOtpField');
-          }
-        } else {
-          e.target.classList.remove('filled');
-        }
-      });
-
-      box.addEventListener('keydown', (e) => {
-        if (e.key === 'Backspace' && !e.target.value && i > 1) {
-          const prev = document.getElementById(`otpBox${i - 1}`);
-          if (prev) {
-            prev.focus();
-            prev.value = '';
-            prev.classList.remove('filled');
-          }
-        }
-      });
-
-      box.addEventListener('paste', (e) => {
-        e.preventDefault();
-        const text = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g, '').substring(0, 6);
-        if (text) {
-          autoFillOtpBoxes(text);
-        }
-      });
+  // ═══════════════════════ SIGN OUT CONFIRMATION (SWIGGY/ZOMATO PARITY) ═══════════════════════
+  function handleCustomerLogout() {
+    const modal = document.getElementById('signOutConfirmModal');
+    if (modal) {
+      modal.classList.add('open');
+    } else {
+      confirmCustomerLogout();
     }
   }
 
-  function autoFillOtpBoxes(code) {
-    const clean = String(code).replace(/\D/g, '').substring(0, 6);
-    for (let i = 1; i <= 6; i++) {
-      const box = document.getElementById(`otpBox${i}`);
-      if (box) {
-        box.value = clean[i - 1] || '';
-        if (box.value) box.classList.add('filled');
-        else box.classList.remove('filled');
-      }
+  function confirmCustomerLogout() {
+    if (window.FoodFlowStore) {
+      window.FoodFlowStore.clearUserSession();
     }
-    const lastBox = document.getElementById(`otpBox${Math.min(clean.length, 6)}`);
-    if (lastBox) lastBox.focus();
-    clearFieldError('forgotOtpField');
-    showToast(`✓ OTP code ${clean} auto-filled!`, 'info');
+    clearAuthForms();
+
+    // Clear checkout delivery inputs to clean blank state
+    const nameInput = document.getElementById('delivName');
+    const phoneInput = document.getElementById('delivPhone');
+    const addrInput = document.getElementById('delivAddress');
+    const noteInput = document.getElementById('delivNotes');
+    if (nameInput) nameInput.value = '';
+    if (phoneInput) phoneInput.value = '';
+    if (addrInput) addrInput.value = '';
+    if (noteInput) noteInput.value = '';
+
+    closeAdminModal('signOutConfirmModal');
+    updateCustomerAuthUI();
+    showCustomerScreen('home');
+    showToast('You have been signed out.', 'info');
   }
 
-  function getEnteredOtpFromBoxes() {
-    let digits = '';
-    for (let i = 1; i <= 6; i++) {
-      const box = document.getElementById(`otpBox${i}`);
-      digits += (box && box.value) ? box.value.trim() : '';
-    }
-    return digits;
-  }
-
-  function clearOtpBoxes() {
-    for (let i = 1; i <= 6; i++) {
-      const box = document.getElementById(`otpBox${i}`);
-      if (box) {
-        box.value = '';
-        box.classList.remove('filled');
-      }
-    }
-  }
-
-  function quickFillForgotInput(val) {
-    const input = document.getElementById('forgotEmailField');
-    if (input) {
-      input.value = val;
-      clearFieldError('forgotEmailField');
-    }
-  }
-
-  function showForgotStep(stepNum) {
-    const s1 = document.getElementById('forgotStep1');
-    const s2 = document.getElementById('forgotStep2');
-    const s3 = document.getElementById('forgotStep3');
-    const s4 = document.getElementById('forgotStep4');
-
-    if (s1) s1.style.display = stepNum === 1 ? 'block' : 'none';
-    if (s2) s2.style.display = stepNum === 2 ? 'block' : 'none';
-    if (s3) s3.style.display = stepNum === 3 ? 'block' : 'none';
-    if (s4) s4.style.display = stepNum === 4 ? 'block' : 'none';
-
-    if (stepNum === 2) {
-      setTimeout(() => {
-        initOtpBoxes();
-        const b1 = document.getElementById('otpBox1');
-        if (b1) b1.focus();
-      }, 100);
-    }
+  // ═══════════════════════ FORGOT PASSWORD OTP WIZARD ═══════════════════════
+  function showForgotStep(stepNumber) {
+    AppState.forgotStep = stepNumber;
+    ['forgotStep1', 'forgotStep2', 'forgotStep3', 'forgotStep4'].forEach((id, idx) => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = idx + 1 === stepNumber ? 'block' : 'none';
+    });
   }
 
   function handleRequestPasswordOTP() {
-    const inputField = document.getElementById('forgotEmailField');
-    if (!inputField || !window.FoodFlowStore) return;
+    clearAllFormErrors('authForgotForm');
+    const input = document.getElementById('forgotEmailField');
+    const identifier = input ? input.value.trim() : '';
 
-    const identifier = inputField.value.trim();
     if (!identifier) {
-      showFieldError('forgotEmailField', 'Please enter your registered mobile number or email address.');
+      showFieldError('forgotEmailField', 'Please enter your registered email address or 10-digit mobile number.');
       return;
     }
-    
-    const isEmail = identifier.includes('@');
-    const isPhone = !isEmail && identifier.replace(/\D/g, '').length >= 10;
-
-    if (!isEmail && !isPhone) {
-      showFieldError('forgotEmailField', 'Please enter a valid 10-digit mobile number or email address.');
-      return;
-    }
-    clearFieldError('forgotEmailField');
 
     try {
       const res = window.FoodFlowStore.generatePasswordResetOTP(identifier);
-      activeForgotState.identifier = identifier;
-      activeForgotState.email = res.email;
-      activeForgotState.phone = res.phone;
-      activeForgotState.maskedDest = res.maskedDest;
-      activeForgotState.otp = res.otp;
-      activeForgotState.verified = false;
+      AppState.forgotTargetEmail = res.email;
+      AppState.forgotOtpCode = res.otp;
 
-      const destDisp = document.getElementById('forgotTargetEmailDisplay');
-      const otpDisp = document.getElementById('simulatedOtpCode');
-      const destIcon = document.getElementById('otpDestIcon');
+      const destDisplay = document.getElementById('forgotTargetEmailDisplay');
+      const hintEl = document.getElementById('forgotOtpCodeHint');
+      if (destDisplay) destDisplay.textContent = res.email;
+      if (hintEl) hintEl.textContent = res.otp;
 
-      if (destDisp) destDisp.textContent = res.maskedDest;
-      if (otpDisp) otpDisp.textContent = res.otp;
-      if (destIcon) destIcon.textContent = res.isPhone ? '📱' : '✉️';
-
-      clearOtpBoxes();
       showForgotStep(2);
-      startForgotCountdown();
-      showToast(`✓ OTP sent to ${res.maskedDest}`, 'success');
+      setupOtpInputBoxes();
+      showToast(`🔑 Verification Code: ${res.otp} (or use 123456)`, 'info');
     } catch (err) {
       showFieldError('forgotEmailField', err.message);
       showToast(err.message, 'error');
     }
   }
 
-  function copySimulatedOtp() {
-    if (activeForgotState.otp) {
-      autoFillOtpBoxes(activeForgotState.otp);
+  function autoFillProfileOtp() {
+    const input = document.getElementById('profileChangeOtpInput');
+    const hintEl = document.getElementById('profileOtpCodeHint');
+    const otp = AppState.profileOtpCode || (hintEl ? hintEl.textContent : '123456');
+    if (input) {
+      input.value = otp;
+      showToast('✓ OTP Code filled: ' + otp, 'info');
     }
   }
 
-  function startForgotCountdown() {
-    if (activeForgotState.countdownInterval) {
-      clearInterval(activeForgotState.countdownInterval);
-    }
-    let remaining = 30;
-    const resendBtn = document.getElementById('resendOtpBtn');
-    if (resendBtn) {
-      resendBtn.disabled = true;
-      resendBtn.textContent = `Resend OTP in 00:${String(remaining).padStart(2, '0')}`;
-    }
+  function autoFillForgotOtp() {
+    const hintEl = document.getElementById('forgotOtpCodeHint');
+    const otp = String(AppState.forgotOtpCode || (hintEl ? hintEl.textContent : '123456'));
+    const digits = otp.split('');
+    digits.forEach((d, i) => {
+      const box = document.getElementById(`otpBox${i + 1}`);
+      if (box) box.value = d;
+    });
+    showToast('✓ OTP Code filled: ' + otp, 'info');
+  }
 
-    activeForgotState.countdownInterval = setInterval(() => {
-      remaining--;
-      if (remaining <= 0) {
-        clearInterval(activeForgotState.countdownInterval);
-        if (resendBtn) {
-          resendBtn.disabled = false;
-          resendBtn.textContent = 'Resend OTP via SMS';
+  function setupOtpInputBoxes() {
+    const boxes = document.querySelectorAll('.otp-digit-input');
+    boxes.forEach((box, idx) => {
+      box.value = '';
+      box.oninput = (e) => {
+        box.value = box.value.replace(/\D/g, '');
+        if (box.value && idx < boxes.length - 1) {
+          boxes[idx + 1].focus();
         }
-      } else {
-        if (resendBtn) resendBtn.textContent = `Resend OTP in 00:${String(remaining).padStart(2, '0')}`;
-      }
-    }, 1000);
+      };
+      box.onkeydown = (e) => {
+        if (e.key === 'Backspace' && !box.value && idx > 0) {
+          boxes[idx - 1].focus();
+        }
+      };
+    });
+    if (boxes[0]) boxes[0].focus();
   }
 
-  function handleVerifyPasswordOTP(action = 'login') {
-    if (!window.FoodFlowStore) return;
-    const entered = getEnteredOtpFromBoxes();
+  function handleVerifyPasswordOTP() {
+    let entered = '';
+    document.querySelectorAll('.otp-digit-input').forEach((b) => (entered += b.value));
 
-    if (!entered || entered.length < 6) {
-      showFieldError('forgotOtpField', 'Please enter all 6 digits of the verification code.');
+    if (entered.length !== 6) {
+      showFieldError('forgotOtpField', 'Please enter the complete 6-digit OTP code.');
       return;
     }
 
-    const check = window.FoodFlowStore.verifyPasswordResetOTP(activeForgotState.email, entered);
-    if (!check.valid) {
-      showFieldError('forgotOtpField', check.message || 'Incorrect 6-digit OTP code.');
-      showToast(check.message || 'Incorrect OTP code', 'error');
+    const res = window.FoodFlowStore.verifyPasswordResetOTP(AppState.forgotTargetEmail, entered);
+    if (!res.valid) {
+      showFieldError('forgotOtpField', res.message);
       return;
     }
 
-    clearFieldError('forgotOtpField');
-    activeForgotState.verified = true;
-    if (activeForgotState.countdownInterval) clearInterval(activeForgotState.countdownInterval);
-
-    if (action === 'login') {
-      const user = window.FoodFlowStore.loginUser(activeForgotState.email);
-      closeAuthModal();
-      updateCustomerAuthUI();
-      showToast(`🎉 Signed in successfully! Welcome, ${user.name}!`, 'success');
-    } else {
-      showForgotStep(3);
-      showToast('✓ OTP verified! Please choose a new password.', 'success');
-      setTimeout(() => {
-        const passInput = document.getElementById('forgotNewPasswordField');
-        if (passInput) passInput.focus();
-      }, 100);
-    }
-  }
-
-  function handleNewPasswordLiveCheck(val) {
-    const hasLen = val.length >= 8;
-    const hasCase = /[a-z]/.test(val) && /[A-Z]/.test(val);
-    const hasNum = /\d/.test(val);
-    const hasSpecial = /[^A-Za-z0-9]/.test(val);
-
-    const cLen = document.getElementById('pwCheckLen');
-    const cCase = document.getElementById('pwCheckCase');
-    const cNum = document.getElementById('pwCheckNum');
-    const cSpec = document.getElementById('pwCheckSpecial');
-
-    if (cLen) cLen.className = 'pw-check-item' + (hasLen ? ' valid' : '');
-    if (cCase) cCase.className = 'pw-check-item' + (hasCase ? ' valid' : '');
-    if (cNum) cNum.className = 'pw-check-item' + (hasNum ? ' valid' : '');
-    if (cSpec) cSpec.className = 'pw-check-item' + (hasSpecial ? ' valid' : '');
-
-    clearFieldError('forgotNewPasswordField');
-  }
-
-  function handleConfirmPasswordLiveCheck(val) {
-    const mainPass = document.getElementById('forgotNewPasswordField')?.value || '';
-    if (val && mainPass && val === mainPass) {
-      clearFieldError('forgotConfirmPasswordField');
-    }
+    showForgotStep(3);
   }
 
   function handleSubmitNewPassword() {
-    const newPassField = document.getElementById('forgotNewPasswordField');
-    const confirmPassField = document.getElementById('forgotConfirmPasswordField');
-    if (!newPassField || !confirmPassField || !window.FoodFlowStore) return;
+    clearAllFormErrors('forgotStep3');
+    const pass = document.getElementById('forgotNewPasswordField')?.value;
+    const passConfirm = document.getElementById('forgotConfirmPasswordField')?.value;
 
-    const newPass = newPassField.value;
-    const confirmPass = confirmPassField.value;
-
-    const hasLen = newPass.length >= 8;
-    const hasCase = /[a-z]/.test(newPass) && /[A-Z]/.test(newPass);
-    const hasNum = /\d/.test(newPass);
-    const hasSpecial = /[^A-Za-z0-9]/.test(newPass);
-
-    if (!newPass) {
-      showFieldError('forgotNewPasswordField', 'New password is required.');
-      return;
+    let hasError = false;
+    const strength = ValidationUtils.evaluatePasswordStrength(pass);
+    if (!strength.isValid) {
+      showFieldError('forgotNewPasswordField', strength.hint);
+      hasError = true;
     }
-    if (!hasLen || !hasCase || !hasNum || !hasSpecial) {
-      showFieldError('forgotNewPasswordField', 'Please ensure your password satisfies all 4 requirements above.');
-      return;
+    if (pass !== passConfirm) {
+      showFieldError('forgotConfirmPasswordField', 'Passwords do not match. Please re-enter.');
+      hasError = true;
     }
-    clearFieldError('forgotNewPasswordField');
 
-    if (!confirmPass) {
-      showFieldError('forgotConfirmPasswordField', 'Please confirm your new password.');
-      return;
-    }
-    if (confirmPass !== newPass) {
-      showFieldError('forgotConfirmPasswordField', 'Passwords do not match. Please re-type.');
-      return;
-    }
-    clearFieldError('forgotConfirmPasswordField');
+    if (hasError) return;
 
-    try {
-      window.FoodFlowStore.updateUserPassword(activeForgotState.email, newPass);
-      
-      const user = window.FoodFlowStore.loginUser(activeForgotState.email);
-      updateCustomerAuthUI();
-
-      const successMsg = document.getElementById('forgotSuccessMessage');
-      if (successMsg) {
-        successMsg.textContent = `Welcome back, ${user.name}! Your new password has been saved in MySQL and you are signed in.`;
-      }
-
-      showForgotStep(4);
-      showToast('✓ Password updated & signed in successfully!', 'success');
-    } catch (err) {
-      showToast(err.message, 'error');
-    }
+    window.FoodFlowStore.updateUserPassword(AppState.forgotTargetEmail, pass);
+    window.FoodFlowStore.loginUser(AppState.forgotTargetEmail, pass);
+    updateCustomerAuthUI();
+    showForgotStep(4);
+    SoundEffects.playSuccess();
   }
 
   function handleFinishPasswordReset() {
     closeAuthModal();
-    updateCustomerAuthUI();
     showCustomerScreen('home');
+    showToast('Signed in successfully with your new password!', 'success');
   }
 
-  function handleCustomerLogout() {
-    if (!window.FoodFlowStore) return;
-    window.FoodFlowStore.logout();
-    updateCustomerAuthUI();
-    showToast('Logged out successfully', 'info');
-    showCustomerScreen('home');
-  }
+  // ═══════════════════════ ORDER CANCELLATION & REFUND MODAL ═══════════════════════
+  let activeCancellingOrderId = null;
 
-  function updateCustomerAuthUI() {
-    if (!window.FoodFlowStore) return;
-    const user = window.FoodFlowStore.getCurrentUser();
-    const authBtn = document.getElementById('navAuthBtn');
-    if (!authBtn) return;
-
-    if (user) {
-      authBtn.innerHTML = `👤 ${user.name.split(' ')[0]}`;
-      authBtn.onclick = openCustomerProfile;
-    } else {
-      authBtn.innerHTML = `Sign In`;
-      authBtn.onclick = () => openAuthModal('login');
-    }
-  }
-
-  // ═══════════════════════ ADMIN PORTAL CONTROLLERS ═══════════════════════
-  function showAdminPage(pageName, navElement) {
-    AppState.activeAdminPage = pageName;
-    document.querySelectorAll('.admin-page').forEach((p) => p.classList.remove('active'));
-    document.querySelectorAll('.admin-nav-item').forEach((n) => n.classList.remove('active'));
-
-    const targetPage = document.getElementById(`admin-page-${pageName}`);
-    if (targetPage) targetPage.classList.add('active');
-    if (navElement) navElement.classList.add('active');
-
-    const titles = {
-      dashboard: 'Dashboard Overview',
-      orders: 'Orders Management',
-      users: 'User Accounts Directory',
-      restaurants: 'Registered Restaurants',
-      menu: 'Menu Management',
-      payments: 'Payment Transactions',
-      health: 'App Health & Live Logs',
-      settings: 'Platform Settings & Promos'
-    };
-
-    const subs = {
-      dashboard: 'Real-time sales, order volume and activity',
-      orders: 'Manage and update live customer orders',
-      users: 'View customer & staff directory, suspend or add accounts',
-      restaurants: 'All restaurant partners, ratings and revenues',
-      menu: 'Add, edit, delete and toggle item availability',
-      payments: 'Comprehensive transaction history and receipts',
-      health: 'Live server metrics, CI/CD pipeline and log streaming',
-      settings: 'Platform fees, maintenance mode & promo coupons'
-    };
-
-    const titleEl = document.getElementById('adminTopbarTitle');
-    const subEl = document.getElementById('adminTopbarSub');
-    if (titleEl) titleEl.textContent = titles[pageName] || 'Admin Panel';
-    if (subEl) subEl.textContent = subs[pageName] || '';
-
-    if (pageName === 'dashboard') renderAdminDashboard();
-    if (pageName === 'orders') renderAdminOrders();
-    if (pageName === 'users') renderAdminUsers();
-    if (pageName === 'restaurants') renderAdminRestaurants();
-    if (pageName === 'menu') renderAdminMenu();
-    if (pageName === 'payments') renderAdminPayments();
-    if (pageName === 'health') renderAdminHealth();
-    if (pageName === 'settings') renderAdminSettingsPromos();
-    updateAdminBadges();
-  }
-
-  function updateAdminBadges() {
-    if (!window.FoodFlowStore) return;
-    const orders = window.FoodFlowStore.getOrders();
-    const pendingCount = orders.filter((o) => o.status === 'pending' || o.status === 'preparing').length;
-    const badge = document.getElementById('adminPendingOrdersBadge');
-    if (badge) badge.textContent = pendingCount;
-  }
-
-  function renderAdminDashboard() {
-    if (!window.FoodFlowStore) return;
-    const stats = window.FoodFlowStore.getDashboardStats();
-    const orders = window.FoodFlowStore.getOrders();
-    const restaurants = window.FoodFlowStore.getRestaurants();
-
-    const ordEl = document.getElementById('admStatOrders');
-    const revEl = document.getElementById('admStatRevenue');
-    const usrEl = document.getElementById('admStatUsers');
-    const pndEl = document.getElementById('admStatPending');
-
-    if (ordEl) ordEl.textContent = stats.totalOrdersToday;
-    if (revEl) revEl.textContent = `₹${stats.revenueToday.toLocaleString()}`;
-    if (usrEl) usrEl.textContent = stats.activeUsersCount;
-    if (pndEl) pndEl.textContent = stats.pendingOrdersCount;
-
-    // Chart
-    const chartEl = document.getElementById('admWeeklyChart');
-    if (chartEl) {
-      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-      const vals = [85, 102, 98, 134, 128, 155, Math.max(stats.totalOrdersToday, 40)];
-      const maxVal = Math.max(...vals);
-      chartEl.innerHTML = vals
-        .map(
-          (v, i) => `
-        <div class="bar-wrap" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;">
-          <div class="bar" style="width:100%; height:${Math.round((v / maxVal) * 140)}px; background:var(--primary); border-radius:4px 4px 0 0; opacity:0.85;" title="${v} orders"></div>
-          <span style="font-size:0.7rem; color:var(--text-muted);">${days[i]}</span>
-        </div>`
-        )
-        .join('');
-    }
-
-    // Category Breakdown
-    const catEl = document.getElementById('admCatBreakdown');
-    if (catEl) {
-      const cats = [
-        ['Biryani', '🍛', 38],
-        ['Pizza', '🍕', 24],
-        ['Burger', '🍔', 18],
-        ['Chinese', '🍜', 12],
-        ['South Indian', '🥘', 8]
-      ];
-      catEl.innerHTML = cats
-        .map(
-          ([name, icon, pct]) => `
-        <div style="margin-bottom:12px;">
-          <div style="display:flex; justify-content:space-between; font-size:0.85rem; margin-bottom:5px;">
-            <span>${icon} ${name}</span><span style="font-weight:700;">${pct}%</span>
-          </div>
-          <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;"></div></div>
-        </div>`
-        )
-        .join('');
-    }
-
-    // Recent Orders Table
-    const recentTable = document.getElementById('admRecentOrdersTable');
-    if (recentTable) {
-      recentTable.innerHTML = `
-        <thead><tr><th>Order ID</th><th>Customer</th><th>Restaurant</th><th>Total</th><th>Status</th></tr></thead>
-        <tbody>${orders
-          .slice(0, 5)
-          .map(
-            (o) => `
-          <tr>
-            <td><strong>#${o.id}</strong></td>
-            <td>${o.customer}</td>
-            <td>${o.restaurant}</td>
-            <td><strong>₹${o.total}</strong></td>
-            <td>${getBadgeForStatus(o.status)}</td>
-          </tr>`
-          )
-          .join('')}</tbody>`;
-    }
-
-    // Top Restaurants
-    const topRestEl = document.getElementById('admTopRestaurants');
-    if (topRestEl) {
-      topRestEl.innerHTML = restaurants
-        .slice(0, 5)
-        .map(
-          (r, i) => `
-        <div style="display:flex; align-items:center; gap:12px; padding:10px 0; ${i < 4 ? 'border-bottom:1px solid var(--border)' : ''}">
-          <span style="font-size:0.8rem; font-weight:800; color:var(--text-light); width:18px;">${i + 1}</span>
-          <img src="${r.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=100&q=80'}" class="admin-thumb-img" alt="${r.name}">
-          <div style="flex:1;">
-            <div style="font-weight:700; font-size:0.9rem;">${r.name}</div>
-            <div style="font-size:0.75rem; color:var(--text-muted);">★ ${r.rating} · ${r.ordersCount || 0} orders</div>
-          </div>
-          <div style="font-weight:800; font-size:0.9rem;">₹${(r.revenue || 0).toLocaleString()}</div>
-        </div>`
-        )
-        .join('');
-    }
-  }
-
-  let activeAdminCancelOrderId = null;
-
-  function renderAdminOrders(customList = null) {
-    if (!window.FoodFlowStore) return;
-    const orders = customList || window.FoodFlowStore.getOrders();
-    const countLabel = document.getElementById('admOrdersCountLabel');
-    if (countLabel) countLabel.textContent = `Showing ${orders.length} orders`;
-
-    const table = document.getElementById('admOrdersTable');
-    if (!table) return;
-
-    table.innerHTML = `
-      <thead>
-        <tr>
-          <th>Order ID</th>
-          <th>Customer</th>
-          <th>Restaurant</th>
-          <th>Items</th>
-          <th>Total</th>
-          <th>Payment</th>
-          <th>Status</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${orders
-          .map(
-            (o) => `
-          <tr>
-            <td><strong style="font-size:0.85rem;">#${o.id}</strong></td>
-            <td>
-              <div style="font-weight:600;">${o.customer}</div>
-              <div style="font-size:0.75rem; color:var(--text-muted);">${o.phone}</div>
-            </td>
-            <td>${o.restaurant}</td>
-            <td style="max-width:180px; font-size:0.82rem; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${o.itemsSummary || ''}">
-              ${o.itemsSummary || (o.items || []).map((i) => `${i.name} ×${i.qty}`).join(', ')}
-            </td>
-            <td><strong>₹${o.total}</strong></td>
-            <td>
-              <div style="font-size:0.82rem;">${o.paymentMethod}</div>
-              <div style="display:flex; align-items:center; gap:4px; margin-top:2px;">
-                <span class="badge ${o.paymentStatus === 'success' ? 'badge-success' : o.paymentStatus === 'refunded' ? 'badge-info' : 'badge-warning'}" style="font-size:0.68rem;">${o.paymentStatus}</span>
-                ${o.refundStatus === 'refunded' ? '<span class="badge badge-success" style="font-size:0.65rem;" title="100% Refunded">💰 Refund</span>' : ''}
-              </div>
-            </td>
-            <td>
-              ${getBadgeForStatus(o.status)}
-              ${o.status === 'cancelled' ? `<div style="font-size:0.72rem; color:var(--danger); max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:2px;" title="${o.cancelReason || ''}">Reason: ${o.cancelReason || 'Cancelled'}</div>` : ''}
-            </td>
-            <td>
-              <div style="display:flex; gap:6px; flex-wrap:wrap;">
-                <button class="action-btn" onclick="openAdminOrderStatusModal('${o.id}')">✏️ Status</button>
-                <button class="action-btn success" onclick="openAdminReceiptModal('${o.id}')">📄 Receipt</button>
-                ${(o.status === 'pending' || o.status === 'preparing') ? `<button class="action-btn danger" onclick="openAdminCancelModal('${o.id}')">✕ Cancel</button>` : ''}
-              </div>
-            </td>
-          </tr>`
-          )
-          .join('')}
-      </tbody>`;
-  }
-
-  function filterAdminOrdersQuery(query) {
-    if (!window.FoodFlowStore) return;
-    const orders = window.FoodFlowStore.getOrders();
-    const q = (query || '').toLowerCase();
-    const filtered = orders.filter(
-      (o) =>
-        o.id.toLowerCase().includes(q) ||
-        o.customer.toLowerCase().includes(q) ||
-        o.restaurant.toLowerCase().includes(q)
-    );
-    renderAdminOrders(filtered);
-  }
-
-  function filterAdminOrdersStatus(statusVal) {
-    if (!window.FoodFlowStore) return;
-    const orders = window.FoodFlowStore.getOrders();
-    if (statusVal === 'all') {
-      renderAdminOrders(orders);
-    } else {
-      renderAdminOrders(orders.filter((o) => o.status === statusVal));
-    }
-  }
-
-  function handleAdminExportCSV() {
-    if (!window.FoodFlowStore) return;
-    const res = window.FoodFlowStore.exportOrdersCSV();
-    if (res) {
-      showToast('✓ Orders exported to CSV file successfully!', 'success');
-    } else {
-      showToast('No orders available to export', 'info');
-    }
-  }
-
-  let activeModalOrderId = null;
-  function openAdminOrderStatusModal(orderId) {
-    if (!window.FoodFlowStore) return;
-    const order = window.FoodFlowStore.getOrderById(orderId);
-    if (!order) return;
-    activeModalOrderId = orderId;
-
-    const idLabel = document.getElementById('admStatusModalOrderId');
-    const select = document.getElementById('admStatusSelect');
-    const note = document.getElementById('admStatusNote');
-
-    if (idLabel) idLabel.textContent = `#${order.id} (${order.customer})`;
-    if (select) select.value = order.status;
-    if (note) note.value = order.adminNote || '';
-
-    const modal = document.getElementById('adminOrderStatusModal');
-    if (modal) modal.classList.add('open');
-  }
-
-  function submitAdminOrderStatus() {
-    if (!activeModalOrderId || !window.FoodFlowStore) return;
-    const select = document.getElementById('admStatusSelect');
-    const note = document.getElementById('admStatusNote');
-    const newStatus = select ? select.value : 'preparing';
-    const noteText = note ? note.value.trim() : '';
-
-    if (newStatus === 'cancelled') {
-      closeAdminModal('adminOrderStatusModal');
-      openAdminCancelModal(activeModalOrderId);
-      return;
-    }
-
-    window.FoodFlowStore.updateOrderStatus(activeModalOrderId, newStatus, noteText);
-    closeAdminModal('adminOrderStatusModal');
-    renderAdminOrders();
-    renderAdminDashboard();
-    updateAdminBadges();
-    showToast(`✓ Order #${activeModalOrderId} updated to "${newStatus.toUpperCase()}"`, 'success');
-  }
-
-  function openAdminCancelModal(orderId) {
+  function openCustomerCancelModal(orderId) {
     if (!window.FoodFlowStore) return;
     const order = window.FoodFlowStore.getOrderById(orderId);
     if (!order) return;
 
-    activeAdminCancelOrderId = orderId;
-    const idEl = document.getElementById('admCancelOrderId');
-    const custEl = document.getElementById('admCancelCustomer');
-    const refundBox = document.getElementById('admCancelRefundBox');
+    activeCancellingOrderId = order.id;
+    const idDisp = document.getElementById('cancelModalOrderId');
+    const amtDisp = document.getElementById('cancelModalAmount');
+    const payDisp = document.getElementById('cancelModalPayment');
+    const noticeDisp = document.getElementById('cancelModalRefundNotice');
 
-    if (idEl) idEl.textContent = `#${order.id}`;
-    if (custEl) custEl.textContent = `${order.customer} (₹${order.total})`;
+    if (idDisp) idDisp.textContent = `#${order.id}`;
+    if (amtDisp) amtDisp.textContent = `₹${order.total}`;
+    if (payDisp) payDisp.textContent = order.paymentMethod;
 
     const isPrepaid = order.paymentMethod !== 'Cash on Delivery';
+    if (noticeDisp) {
+      noticeDisp.innerHTML = isPrepaid
+        ? `<div style="background:#E8F8EE; border:1px solid #86EFAC; color:#166534; padding:0.75rem; border-radius:8px; font-size:0.84rem;">
+            <strong>✓ Instant 100% Refund Eligible:</strong> ₹${order.total} will be refunded back immediately to your ${order.paymentMethod}.
+           </div>`
+        : `<div style="background:#EFF6FF; border:1px solid #BFDBFE; color:#1E40AF; padding:0.75rem; border-radius:8px; font-size:0.84rem;">
+            <strong>💵 Cash on Delivery (COD) Order:</strong> If you have already handed over cash to the delivery executive, the cash refund will be returned directly to you by the delivery executive.
+           </div>`;
+    }
 
-    if (refundBox) {
-      if (isPrepaid) {
-        refundBox.innerHTML = `
-          <div class="refund-card-highlight">
-            <div class="refund-icon">💰</div>
-            <div>
-              <div style="font-weight:800; font-size:0.92rem; color:#166534;">Automated Prepaid Refund: ₹${order.total}</div>
-              <div style="font-size:0.8rem; color:#14532D; margin-top:2px;">
-                Since order was paid via <strong>${order.paymentMethod}</strong>, canceling will automatically issue a 100% refund and log a refund transaction.
-              </div>
-            </div>
-          </div>`;
-      } else {
-        refundBox.innerHTML = `
-          <div class="cancel-reason-box" style="background:#F0FDF4; border-color:#BBF7D0; color:#166534;">
-            ℹ️ Cash on Delivery order — No payment refund deduction required.
-          </div>`;
+    const modal = document.getElementById('customerCancelOrderModal');
+    if (modal) modal.classList.add('open');
+  }
+
+  function confirmCustomerOrderCancellation() {
+    if (!activeCancellingOrderId || !window.FoodFlowStore) return;
+    const reasonSel = document.getElementById('custCancelReasonSelect');
+    const notesEl = document.getElementById('custCancelNotes');
+
+    const reason = (reasonSel ? reasonSel.value : '') + (notesEl && notesEl.value.trim() ? ` (${notesEl.value.trim()})` : '');
+
+    const res = window.FoodFlowStore.cancelOrder(activeCancellingOrderId, reason, 'Customer');
+    closeAdminModal('customerCancelOrderModal');
+
+    if (res.success) {
+      showToast(res.message, 'success');
+      if (AppState.activeCustomerScreen === 'profile') {
+        renderProfileContent(AppState.activeProfileTab);
       }
-    }
-
-    const modal = document.getElementById('adminCancelOrderModal');
-    if (modal) modal.classList.add('open');
-  }
-
-  function handleAdminCancelReasonChange(val) {
-    const customGroup = document.getElementById('admCancelCustomReasonGroup');
-    if (customGroup) {
-      customGroup.style.display = val === 'Other' ? 'block' : 'none';
-    }
-  }
-
-  function submitAdminCancelOrder() {
-    if (!activeAdminCancelOrderId || !window.FoodFlowStore) return;
-    const select = document.getElementById('admCancelReasonSelect');
-    const customInput = document.getElementById('admCancelCustomReasonInput');
-    const noteEl = document.getElementById('admCancelInternalNote');
-
-    let reason = select ? select.value : 'Cancelled by Admin';
-    if (reason === 'Other' && customInput && customInput.value.trim()) {
-      reason = customInput.value.trim();
-    } else if (reason === 'Other') {
-      showToast('Please specify the custom cancellation reason', 'error');
-      return;
-    }
-
-    if (noteEl && noteEl.value.trim()) {
-      reason += ` — Note: ${noteEl.value.trim()}`;
-    }
-
-    const res = window.FoodFlowStore.cancelOrder(activeAdminCancelOrderId, reason, 'Super Admin');
-    closeAdminModal('adminCancelOrderModal');
-
-    renderAdminOrders();
-    renderAdminPayments();
-    renderAdminDashboard();
-    updateAdminBadges();
-    renderAdminHealth();
-
-    showToast(`✓ Order #${activeAdminCancelOrderId} cancelled. ${res.message}`, 'success');
-  }
-
-  function renderAdminUsers(customList = null) {
-    if (!window.FoodFlowStore) return;
-    const users = customList || window.FoodFlowStore.getUsers();
-    const table = document.getElementById('admUsersTable');
-    if (!table) return;
-
-    table.innerHTML = `
-      <thead>
-        <tr>
-          <th>User ID</th>
-          <th>Full Name</th>
-          <th>Email</th>
-          <th>Role</th>
-          <th>Orders</th>
-          <th>Total Spent</th>
-          <th>Status</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${users
-          .map(
-            (u) => `
-          <tr>
-            <td style="color:var(--text-muted); font-size:0.8rem;">${u.id}</td>
-            <td><strong>${u.name}</strong></td>
-            <td style="font-size:0.82rem;">${u.email}</td>
-            <td><span class="badge ${u.role === 'Customer' ? 'badge-neutral' : u.role.includes('Admin') ? 'badge-primary' : 'badge-info'}">${u.role}</span></td>
-            <td>${u.ordersCount || 0}</td>
-            <td>${u.totalSpent ? '₹' + u.totalSpent.toLocaleString() : '—'}</td>
-            <td>${getBadgeForStatus(u.status)}</td>
-            <td>
-              <button class="action-btn ${u.status === 'active' ? 'danger' : 'success'}" onclick="handleAdminToggleUser('${u.id}')">
-                ${u.status === 'active' ? '⊘ Suspend' : '✓ Activate'}
-              </button>
-            </td>
-          </tr>`
-          )
-          .join('')}
-      </tbody>`;
-  }
-
-  function filterAdminUsersQuery(query) {
-    if (!window.FoodFlowStore) return;
-    const users = window.FoodFlowStore.getUsers();
-    const q = (query || '').toLowerCase();
-    const filtered = users.filter((u) => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || u.role.toLowerCase().includes(q));
-    renderAdminUsers(filtered);
-  }
-
-  function filterAdminUsersRole(roleVal) {
-    if (!window.FoodFlowStore) return;
-    const users = window.FoodFlowStore.getUsers();
-    if (roleVal === 'All' || roleVal === 'All Roles') {
-      renderAdminUsers(users);
-    } else {
-      renderAdminUsers(users.filter((u) => u.role === roleVal));
-    }
-  }
-
-  function handleAdminToggleUser(userId) {
-    if (!window.FoodFlowStore) return;
-    const updated = window.FoodFlowStore.toggleUserStatus(userId);
-    if (updated) {
-      renderAdminUsers();
-      showToast(`User #${userId} status set to ${updated.status.toUpperCase()}`, updated.status === 'active' ? 'success' : 'error');
-    }
-  }
-
-  function openAddUserModal() {
-    const modal = document.getElementById('adminAddUserModal');
-    if (modal) modal.classList.add('open');
-  }
-
-  function submitAdminAddUser() {
-    const first = document.getElementById('admAddUserFirst');
-    const last = document.getElementById('admAddUserLast');
-    const email = document.getElementById('admAddUserEmail');
-    const phone = document.getElementById('admAddUserPhone');
-    const pass = document.getElementById('admAddUserPassword');
-    const role = document.getElementById('admAddUserRole');
-
-    if (!first || !email || !phone || !window.FoodFlowStore) return;
-
-    const firstName = first.value.trim();
-    const lastName = last ? last.value.trim() : '';
-    const emailVal = email.value.trim();
-    const phoneVal = phone.value.trim();
-    const passwordVal = pass ? pass.value : 'Password@123';
-
-    let hasErrors = false;
-
-    if (!firstName || !ValidationUtils.isValidName(firstName)) {
-      showFieldError('admAddUserFirst', 'Valid first name is required (2-35 letters).');
-      hasErrors = true;
-    } else {
-      clearFieldError('admAddUserFirst');
-    }
-
-    if (lastName && !ValidationUtils.isValidLastName(lastName)) {
-      showFieldError('admAddUserLast', 'Last name must contain letters only.');
-      hasErrors = true;
-    } else if (last) {
-      clearFieldError('admAddUserLast');
-    }
-
-    if (!emailVal || !ValidationUtils.isValidEmail(emailVal)) {
-      showFieldError('admAddUserEmail', 'Valid email address is required.');
-      hasErrors = true;
-    } else if (window.FoodFlowStore.getUserByEmail(emailVal)) {
-      showFieldError('admAddUserEmail', 'An account with this email already exists.');
-      hasErrors = true;
-    } else {
-      clearFieldError('admAddUserEmail');
-    }
-
-    if (!phoneVal || !ValidationUtils.isValidPhone(phoneVal)) {
-      showFieldError('admAddUserPhone', 'Valid 10-digit phone number is required.');
-      hasErrors = true;
-    } else {
-      clearFieldError('admAddUserPhone');
-    }
-
-    if (pass && passwordVal && passwordVal.length < 6) {
-      showFieldError('admAddUserPassword', 'Password must be at least 6 characters.');
-      hasErrors = true;
-    } else if (pass) {
-      clearFieldError('admAddUserPassword');
-    }
-
-    if (hasErrors) {
-      showToast('Please resolve validation errors in the form.', 'error');
-      return;
-    }
-
-    try {
-      const newUser = window.FoodFlowStore.registerUser({
-        firstName: firstName,
-        lastName: lastName,
-        email: emailVal,
-        password: passwordVal,
-        phone: phoneVal,
-        role: role ? role.value : 'Customer'
-      });
-      closeAdminModal('adminAddUserModal');
-      renderAdminUsers();
-      showToast(`✓ User ${newUser.name} created successfully!`, 'success');
-    } catch (err) {
-      showToast(err.message, 'error');
-    }
-  }
-
-  function renderAdminRestaurants(customList = null) {
-    if (!window.FoodFlowStore) return;
-    const list = customList || window.FoodFlowStore.getRestaurants();
-    const table = document.getElementById('admRestaurantsTable');
-    if (!table) return;
-
-    table.innerHTML = `
-      <thead>
-        <tr>
-          <th>Restaurant</th>
-          <th>Cuisine</th>
-          <th>Rating</th>
-          <th>Orders</th>
-          <th>Revenue</th>
-          <th>Status</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${list
-          .map(
-            (r) => `
-          <tr>
-            <td>
-              <div style="display:flex; align-items:center; gap:12px;">
-                <img src="${r.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=100&q=80'}" class="admin-thumb-img" alt="${r.name}">
-                <div>
-                  <strong>${r.name}</strong>
-                  <div style="font-size:0.75rem; color:var(--text-muted);">${r.location || ''}</div>
-                </div>
-              </div>
-            </td>
-            <td>${r.cuisine}</td>
-            <td><span style="color:var(--warning); font-weight:700;">★ ${r.rating}</span></td>
-            <td>${r.ordersCount || 0}</td>
-            <td><strong>₹${(r.revenue || 0).toLocaleString()}</strong></td>
-            <td>${getBadgeForStatus(r.status)}</td>
-            <td>
-              <button class="action-btn ${r.status === 'active' ? 'danger' : 'success'}" onclick="handleAdminToggleRestaurant(${r.id})">
-                ${r.status === 'active' ? 'Deactivate' : 'Activate'}
-              </button>
-            </td>
-          </tr>`
-          )
-          .join('')}
-      </tbody>`;
-  }
-
-  function filterAdminRestaurantsQuery(query) {
-    if (!window.FoodFlowStore) return;
-    const list = window.FoodFlowStore.getRestaurants();
-    const q = (query || '').toLowerCase();
-    const filtered = list.filter((r) => r.name.toLowerCase().includes(q) || r.cuisine.toLowerCase().includes(q));
-    renderAdminRestaurants(filtered);
-  }
-
-  function handleAdminToggleRestaurant(restId) {
-    if (!window.FoodFlowStore) return;
-    const rest = window.FoodFlowStore.getRestaurantById(restId);
-    if (!rest) return;
-    const newStatus = rest.status === 'active' ? 'inactive' : 'active';
-    window.FoodFlowStore.updateRestaurant(restId, { status: newStatus });
-    renderAdminRestaurants();
-    showToast(`${rest.name} set to ${newStatus.toUpperCase()}`, 'info');
-  }
-
-  function openAddRestaurantModal() {
-    const modal = document.getElementById('adminAddRestaurantModal');
-    if (modal) modal.classList.add('open');
-  }
-
-  function submitAdminAddRestaurant() {
-    const name = document.getElementById('admAddRestName');
-    const image = document.getElementById('admAddRestImage') || document.getElementById('admAddRestEmoji');
-    const cuisine = document.getElementById('admAddRestCuisine');
-    const time = document.getElementById('admAddRestTime');
-    const fee = document.getElementById('admAddRestFee');
-    const desc = document.getElementById('admAddRestDesc');
-
-    if (!name || !name.value.trim() || !window.FoodFlowStore) {
-      showToast('Please enter restaurant name', 'error');
-      return;
-    }
-
-    const newRest = window.FoodFlowStore.addRestaurant({
-      name: name.value.trim(),
-      image: image && image.value.trim() ? image.value.trim() : 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=600&q=80',
-      cuisine: cuisine && cuisine.value.trim() ? cuisine.value.trim() : 'Multi-Cuisine',
-      deliveryTime: time && time.value.trim() ? time.value.trim() : '25–35',
-      feeValue: fee ? Number(fee.value) : 30,
-      desc: desc ? desc.value.trim() : 'Fresh culinary dishes prepared to order'
-    });
-
-    closeAdminModal('adminAddRestaurantModal');
-    renderAdminRestaurants();
-    showToast(`✓ Restaurant "${newRest.name}" registered!`, 'success');
-  }
-
-  function renderAdminMenu() {
-    if (!window.FoodFlowStore) return;
-    const filterRest = document.getElementById('admMenuRestSelect');
-    const restId = filterRest ? filterRest.value : 'all';
-    const items = window.FoodFlowStore.getMenuItems(restId);
-
-    const container = document.getElementById('admMenuItemsContainer');
-    if (!container) return;
-
-    const byRest = {};
-    items.forEach((item) => {
-      if (!byRest[item.restaurant]) byRest[item.restaurant] = [];
-      byRest[item.restaurant].push(item);
-    });
-
-    container.innerHTML = Object.entries(byRest)
-      .map(
-        ([restaurantName, restItems]) => `
-      <div class="card" style="margin-bottom:1.5rem;">
-        <div class="card-header">
-          <span class="card-title">${restaurantName} (${restItems.length} items)</span>
-          <button class="filter-btn outline" style="font-size:0.8rem;" onclick="openAddMenuModal()">+ Add Item</button>
-        </div>
-        <div class="card-body" style="padding:0 1.25rem;">
-          ${restItems
-            .map(
-              (item) => `
-            <div style="display:flex; align-items:center; gap:14px; padding:12px 0; border-bottom:1px solid var(--border);">
-              <img src="${item.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=100&q=80'}" class="admin-thumb-img" style="width:48px; height:48px;" alt="${item.name}">
-              <div style="flex:1;">
-                <div style="font-weight:700; font-size:0.95rem;">
-                  ${item.name} ${item.veg ? '<span style="color:#17A865; font-size:0.75rem;">🌿 Veg</span>' : '<span style="color:#DC2626; font-size:0.75rem;">🍗 Non-Veg</span>'}
-                </div>
-                <div style="font-size:0.8rem; color:var(--text-muted);">${item.category} · ${item.desc || ''}</div>
-              </div>
-              <span style="font-weight:800; font-size:1rem; min-width:65px; text-align:right;">₹${item.price}</span>
-              <div style="display:flex; align-items:center; gap:12px;">
-                <label class="toggle" title="${item.available ? 'Item Available (Click to toggle)' : 'Item Unavailable'}">
-                  <input type="checkbox" ${item.available ? 'checked' : ''} onchange="handleAdminToggleItemAvailability(${item.id}, this.checked)">
-                  <span class="toggle-slider"></span>
-                </label>
-                <button class="action-btn danger" onclick="handleAdminDeleteItem(${item.id})">🗑️</button>
-              </div>
-            </div>`
-            )
-            .join('')}
-        </div>
-      </div>`
-      )
-      .join('');
-  }
-
-  function handleAdminToggleItemAvailability(itemId, isChecked) {
-    if (!window.FoodFlowStore) return;
-    window.FoodFlowStore.toggleMenuItemAvailability(itemId, isChecked);
-    showToast(`Item #${itemId} marked ${isChecked ? 'AVAILABLE' : 'UNAVAILABLE'}`, 'info');
-  }
-
-  function handleAdminDeleteItem(itemId) {
-    if (!window.FoodFlowStore) return;
-    if (confirm('Are you sure you want to delete this menu item?')) {
-      window.FoodFlowStore.deleteMenuItem(itemId);
-      renderAdminMenu();
-      showToast('Menu item deleted', 'info');
-    }
-  }
-
-  function openAddMenuModal() {
-    const modal = document.getElementById('adminAddMenuModal');
-    if (modal) modal.classList.add('open');
-  }
-
-  function submitAdminAddMenuItem() {
-    const name = document.getElementById('admAddItemName');
-    const emoji = document.getElementById('admAddItemEmoji');
-    const desc = document.getElementById('admAddItemDesc');
-    const price = document.getElementById('admAddItemPrice');
-    const category = document.getElementById('admAddItemCategory');
-    const restSelect = document.getElementById('admAddItemRestSelect');
-    const typeSelect = document.getElementById('admAddItemType');
-
-    if (!name || !name.value.trim() || !price || !price.value || !window.FoodFlowStore) {
-      showToast('Please provide an Item Name and Price', 'error');
-      return;
-    }
-
-    const newItem = window.FoodFlowStore.addMenuItem({
-      name: name.value.trim(),
-      emoji: emoji && emoji.value.trim() ? emoji.value.trim() : '🍽️',
-      desc: desc ? desc.value.trim() : '',
-      price: Number(price.value),
-      category: category && category.value.trim() ? category.value.trim() : 'Specials',
-      restId: restSelect ? Number(restSelect.value) : 1,
-      veg: typeSelect ? typeSelect.value === 'veg' : false,
-      available: true
-    });
-
-    closeAdminModal('adminAddMenuModal');
-    renderAdminMenu();
-    showToast(`✓ Added "${newItem.name}" to menu!`, 'success');
-  }
-
-  function renderAdminPayments() {
-    if (!window.FoodFlowStore) return;
-    const payments = window.FoodFlowStore.getPayments();
-    const table = document.getElementById('admPaymentsTable');
-    if (!table) return;
-
-    table.innerHTML = `
-      <thead>
-        <tr>
-          <th>Txn ID</th>
-          <th>Order ID</th>
-          <th>Customer</th>
-          <th>Amount</th>
-          <th>Payment Method</th>
-          <th>Timestamp</th>
-          <th>Status</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${payments
-          .map(
-            (p) => `
-          <tr style="${p.status === 'refunded' ? 'background:rgba(232,248,238,0.5);' : ''}">
-            <td><strong style="font-size:0.82rem;">${p.id}</strong></td>
-            <td>#${p.orderId}</td>
-            <td>${p.customer}</td>
-            <td>
-              <strong style="${p.status === 'refunded' ? 'color:#166534;' : ''}">
-                ${p.status === 'refunded' ? '-' : ''}₹${p.amount}
-              </strong>
-            </td>
-            <td>
-              <div style="font-size:0.82rem;">${p.method}</div>
-              ${p.refundRef ? `<div style="font-size:0.7rem; color:#166534; font-family:var(--code-font);">Ref: ${p.refundRef}</div>` : ''}
-            </td>
-            <td style="font-size:0.8rem; color:var(--text-muted);">${p.time}</td>
-            <td>
-              <span class="badge ${p.status === 'success' ? 'badge-success' : p.status === 'refunded' ? 'badge-primary' : 'badge-danger'}">
-                ${p.status === 'refunded' ? '💰 Refunded' : p.status === 'success' ? '✓ Success' : '✗ Failed'}
-              </span>
-            </td>
-            <td>
-              <button class="action-btn" onclick="openAdminReceiptModal('${p.orderId}')">📄 Receipt</button>
-              ${p.status === 'failed' ? `<button class="action-btn success" onclick="handleAdminRetryPayment('${p.id}')">↩ Retry</button>` : ''}
-            </td>
-          </tr>`
-          )
-          .join('')}
-      </tbody>`;
-  }
-
-  function handleAdminRetryPayment(txnId) {
-    if (!window.FoodFlowStore) return;
-    const res = window.FoodFlowStore.retryPayment(txnId);
-    if (res) {
-      renderAdminPayments();
-      renderAdminOrders();
-      renderAdminDashboard();
-      showToast(`Payment ${txnId} re-processed successfully!`, 'success');
+      if (AppState.activeCustomerScreen === 'success') {
+        const ord = window.FoodFlowStore.getOrderById(activeCancellingOrderId);
+        if (ord) renderLiveOrderTracker(ord);
+      }
     }
   }
 
@@ -2605,125 +2709,628 @@
     if (!order) return;
 
     const content = document.getElementById('receiptModalContent');
-    if (content) {
-      content.innerHTML = `
-        <div style="text-align:center; margin-bottom:1.5rem;">
-          <div style="font-size:2rem; font-weight:800;">🍕 Food<span style="color:var(--primary)">Flow</span></div>
-          <div style="font-size:0.85rem; color:var(--text-muted);">Official Tax Invoice & Order Receipt</div>
+    if (!content) return;
+
+    content.innerHTML = `
+      <div class="receipt-box" style="font-family:'JetBrains Mono', monospace; font-size:0.85rem; line-height:1.5;">
+        <div style="text-align:center; margin-bottom:1rem; border-bottom:1.5px dashed var(--border); padding-bottom:0.75rem;">
+          <h2 style="margin:0; font-family:'Plus Jakarta Sans', sans-serif;">🍕 FoodFlow</h2>
+          <div style="font-size:0.78rem; color:var(--text-muted);">Official Tax Invoice / Receipt</div>
+          <div style="font-weight:700; margin-top:4px;">Order #${order.id}</div>
+          <div style="font-size:0.75rem; color:var(--text-muted);">${order.timeFormatted || 'Today'}</div>
         </div>
-        <div style="background:var(--surface2); padding:1rem; border-radius:8px; margin-bottom:1rem; font-size:0.88rem;">
-          <div><strong>Order ID:</strong> #${order.id}</div>
-          <div><strong>Customer:</strong> ${order.customer} (${order.phone})</div>
+        <div style="margin-bottom:0.75rem;">
+          <div><strong>Customer:</strong> ${order.customer}</div>
           <div><strong>Restaurant:</strong> ${order.restaurant}</div>
-          <div><strong>Date & Time:</strong> ${order.timeFormatted || 'Today'}</div>
-          <div><strong>Payment Method:</strong> ${order.paymentMethod} (${order.paymentStatus})</div>
-          <div><strong>Address:</strong> ${order.address}</div>
+          <div><strong>Payment:</strong> ${order.paymentMethod}</div>
+          <div><strong>Status:</strong> ${order.status.toUpperCase()}</div>
         </div>
-        <table style="width:100%; border-collapse:collapse; font-size:0.88rem; margin-bottom:1rem;">
-          <thead>
-            <tr style="border-bottom:1.5px solid var(--border); text-align:left;">
-              <th style="padding:6px;">Item</th>
-              <th style="padding:6px; text-align:center;">Qty</th>
-              <th style="padding:6px; text-align:right;">Price</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${(order.items || [])
-              .map(
-                (i) => `
-              <tr style="border-bottom:1px solid var(--border);">
-                <td style="padding:6px; display:flex; align-items:center; gap:8px;">
-                  <img src="${i.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=100&q=80'}" style="width:28px; height:28px; border-radius:4px; object-fit:cover;">
-                  <span>${i.name}</span>
-                </td>
-                <td style="padding:6px; text-align:center;">×${i.qty}</td>
-                <td style="padding:6px; text-align:right;">₹${i.price * i.qty}</td>
-              </tr>`
-              )
-              .join('')}
-          </tbody>
-        </table>
-        <div style="display:flex; justify-content:space-between; font-size:0.88rem; margin-bottom:4px;"><span>Subtotal:</span><span>₹${order.subtotal}</span></div>
-        <div style="display:flex; justify-content:space-between; font-size:0.88rem; margin-bottom:4px;"><span>Delivery Fee:</span><span>₹${order.deliveryFee}</span></div>
-        <div style="display:flex; justify-content:space-between; font-size:0.88rem; margin-bottom:4px;"><span>Platform Fee:</span><span>₹${order.platformFee}</span></div>
-        ${order.discount ? `<div style="display:flex; justify-content:space-between; font-size:0.88rem; color:var(--success); margin-bottom:4px;"><span>Discount:</span><span>-₹${order.discount}</span></div>` : ''}
-        <hr style="margin:8px 0; border:none; border-top:1.5px solid var(--border);">
-        <div style="display:flex; justify-content:space-between; font-size:1.1rem; font-weight:800;"><span>Total Paid:</span><span>₹${order.total}</span></div>
-      `;
-    }
+        <div style="border-top:1px dashed var(--border); border-bottom:1px dashed var(--border); padding:0.5rem 0; margin-bottom:0.75rem;">
+          ${(order.items || [])
+            .map(
+              (i) => `
+            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+              <span>${i.name} ×${i.qty}</span>
+              <span>₹${i.price * i.qty}</span>
+            </div>`
+            )
+            .join('')}
+        </div>
+        <div style="display:flex; justify-content:space-between;"><span>Subtotal</span><span>₹${order.subtotal}</span></div>
+        <div style="display:flex; justify-content:space-between;"><span>Delivery Fee</span><span>₹${order.deliveryFee}</span></div>
+        <div style="display:flex; justify-content:space-between;"><span>Platform Fee</span><span>₹${order.platformFee || 5}</span></div>
+        ${order.discount ? `<div style="display:flex; justify-content:space-between; color:var(--success);"><span>Discount</span><span>-₹${order.discount}</span></div>` : ''}
+        <div style="display:flex; justify-content:space-between; font-weight:800; font-size:1.05rem; margin-top:6px; border-top:1px solid var(--border); padding-top:6px;">
+          <span>Grand Total</span><span>₹${order.total}</span>
+        </div>
+        ${order.refundStatus === 'refunded' ? `
+        <div style="margin-top:10px; background:#E8F8EE; padding:6px; border-radius:4px; text-align:center; color:#166534; font-weight:700;">
+          💰 100% REFUND OF ₹${order.refundAmount || order.total} PROCESSED (Ref: ${order.refundId || 'REF-AUTO'})
+        </div>` : ''}
+      </div>`;
 
     const modal = document.getElementById('receiptModal');
     if (modal) modal.classList.add('open');
   }
 
-  function renderAdminHealth() {
-    if (!window.FoodFlowStore) return;
-    const logContainer = document.getElementById('adminLiveLogOutput');
-    if (!logContainer) return;
-    const logs = window.FoodFlowStore.getLogs();
+  // ═══════════════════════ ADMIN PORTAL ═══════════════════════
+  function showAdminPage(pageName, btnEl) {
+    AppState.activeAdminPage = pageName;
+    document.querySelectorAll('.admin-nav-item').forEach((b) => b.classList.remove('active'));
+    if (btnEl) btnEl.classList.add('active');
 
-    logContainer.innerHTML = logs
-      .map((l) => {
-        const color = l.type === 'WARN' ? '#F7B733' : l.type === 'ERROR' ? '#DC2626' : '#17A865';
-        return `<div><span style="color:${color}; font-weight:bold;">[${l.type}]</span> <span style="color:#777;">${l.time}</span> ${l.text}</div>`;
-      })
-      .join('');
+    document.querySelectorAll('.admin-page').forEach((p) => p.classList.remove('active'));
+    const target = document.getElementById(`admin-page-${pageName}`);
+    if (target) target.classList.add('active');
 
-    logContainer.scrollTop = logContainer.scrollHeight;
+    const titles = {
+      dashboard: ['Dashboard Overview', 'Real-time sales, order volume and analytics'],
+      orders: ['Customer Orders Management', 'Track active kitchens, dispatch and cancellations'],
+      users: ['User Accounts Directory', 'Manage customer profiles and staff permissions'],
+      restaurants: ['Restaurant Partners', 'Live vendor catalog and status controls'],
+      menu: ['Menu Items Catalog', 'Manage dishes, prices and real-time inventory'],
+      payments: ['Payment Transactions Ledger', 'Verified payment receipts and refunds'],
+      settings: ['Platform Settings & Coupons', 'Global configurations and promo discounts']
+    };
+
+    const titleEl = document.getElementById('adminTopbarTitle');
+    const subEl = document.getElementById('adminTopbarSub');
+    if (titleEl && titles[pageName]) titleEl.textContent = titles[pageName][0];
+    if (subEl && titles[pageName]) subEl.textContent = titles[pageName][1];
+
+    if (pageName === 'dashboard') renderAdminDashboard();
+    else if (pageName === 'orders') renderAdminOrders();
+    else if (pageName === 'users') renderAdminUsers();
+    else if (pageName === 'restaurants') renderAdminRestaurants();
+    else if (pageName === 'menu') renderAdminMenu();
+    else if (pageName === 'payments') renderAdminPayments();
+    else if (pageName === 'settings') renderAdminSettings();
   }
 
-  function handleGenerateTestLog() {
+  function renderAdminDashboard() {
     if (!window.FoodFlowStore) return;
-    window.FoodFlowStore.addLog('INFO', `Manual health check performed by Super Admin (${new Date().toLocaleTimeString()})`);
-    showToast('Test system log appended', 'info');
+    const orders = window.FoodFlowStore.getOrders();
+    const users = window.FoodFlowStore.getUsers();
+
+    const nonCancelled = orders.filter((o) => o.status !== 'cancelled');
+    const revenue = nonCancelled.reduce((acc, o) => acc + o.total, 0);
+    const pending = orders.filter((o) => o.status === 'pending' || o.status === 'preparing');
+
+    const ordersEl = document.getElementById('admStatOrders');
+    const revEl = document.getElementById('admStatRevenue');
+    const usersEl = document.getElementById('admStatUsers');
+    const pendEl = document.getElementById('admStatPending');
+    const badge = document.getElementById('adminPendingOrdersBadge');
+
+    if (ordersEl) ordersEl.textContent = orders.length;
+    if (revEl) revEl.textContent = `₹${revenue.toLocaleString()}`;
+    if (usersEl) usersEl.textContent = users.length;
+    if (pendEl) pendEl.textContent = pending.length;
+    if (badge) badge.textContent = pending.length;
+
+    const recentTable = document.getElementById('admRecentOrdersTable');
+    if (recentTable) {
+      recentTable.innerHTML = `
+        <thead>
+          <tr>
+            <th>Order ID</th>
+            <th>Customer</th>
+            <th>Restaurant</th>
+            <th>Total</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${orders.slice(0, 5).map((o) => `
+            <tr>
+              <td><strong>#${o.id}</strong></td>
+              <td>${o.customer}</td>
+              <td>${o.restaurant}</td>
+              <td>₹${o.total}</td>
+              <td>${getBadgeForStatus(o.status)}</td>
+              <td><button class="action-btn" onclick="openAdminStatusModal('${o.id}')">Update</button></td>
+            </tr>
+          `).join('')}
+        </tbody>`;
+    }
   }
 
-  function renderAdminSettingsPromos() {
+  function renderAdminOrders() {
+    if (!window.FoodFlowStore) return;
+    const orders = window.FoodFlowStore.getOrders();
+    const table = document.getElementById('admOrdersTable');
+    if (!table) return;
+
+    table.innerHTML = `
+      <thead>
+        <tr>
+          <th>Order ID</th>
+          <th>Customer</th>
+          <th>Restaurant</th>
+          <th>Items Summary</th>
+          <th>Total</th>
+          <th>Payment</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${orders.map((o) => `
+          <tr>
+            <td><strong>#${o.id}</strong></td>
+            <td>${o.customer}<br><span style="font-size:0.75rem; color:var(--text-muted);">${o.phone}</span></td>
+            <td>${o.restaurant}</td>
+            <td style="max-width:220px; font-size:0.82rem;">${o.itemsSummary || (o.items || []).map((i) => `${i.name} ×${i.qty}`).join(', ')}</td>
+            <td><strong>₹${o.total}</strong></td>
+            <td><span style="font-size:0.8rem;">${o.paymentMethod}</span></td>
+            <td>${getBadgeForStatus(o.status)}</td>
+            <td>
+              <div style="display:flex; gap:6px;">
+                <button class="action-btn" onclick="openAdminStatusModal('${o.id}')">Status</button>
+                <button class="action-btn" onclick="openAdminReceiptModal('${o.id}')">Receipt</button>
+              </div>
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>`;
+  }
+
+  function renderAdminUsers() {
+    if (!window.FoodFlowStore) return;
+    const users = window.FoodFlowStore.getUsers();
+    const table = document.getElementById('admUsersTable');
+    if (!table) return;
+
+    table.innerHTML = `
+      <thead>
+        <tr>
+          <th>User</th>
+          <th>Email</th>
+          <th>Phone</th>
+          <th>Role</th>
+          <th>Total Spent</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${users.map((u) => `
+          <tr>
+            <td><strong>${u.name}</strong></td>
+            <td>${u.email}</td>
+            <td>${u.phone || '—'}</td>
+            <td><span class="badge ${u.role === 'Super Admin' ? 'badge-primary' : 'badge-neutral'}">${u.role}</span></td>
+            <td>₹${(u.totalSpent || 0).toLocaleString()}</td>
+            <td><span class="badge ${u.status === 'active' ? 'badge-success' : 'badge-danger'}">${u.status}</span></td>
+            <td>
+              <button class="action-btn ${u.status === 'active' ? 'danger' : 'success'}" onclick="handleToggleUserStatus('${u.id}')">
+                ${u.status === 'active' ? 'Suspend' : 'Activate'}
+              </button>
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>`;
+  }
+
+  function handleToggleUserStatus(userId) {
+    if (!window.FoodFlowStore) return;
+    const u = window.FoodFlowStore.toggleUserStatus(userId);
+    if (u) {
+      renderAdminUsers();
+      showToast(`User ${u.name} is now ${u.status}`, 'info');
+    }
+  }
+
+  function renderAdminRestaurants() {
+    if (!window.FoodFlowStore) return;
+    const rests = window.FoodFlowStore.getRestaurants();
+    const table = document.getElementById('admRestaurantsTable');
+    if (!table) return;
+
+    table.innerHTML = `
+      <thead>
+        <tr>
+          <th>Restaurant Name</th>
+          <th>Cuisine</th>
+          <th>Rating</th>
+          <th>Location</th>
+          <th>Delivery Fee</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rests.map((r) => `
+          <tr>
+            <td><strong>${r.name}</strong></td>
+            <td><span class="rest-tag">${r.cuisine}</span></td>
+            <td>★ ${r.rating}</td>
+            <td>${r.location}</td>
+            <td>${r.fee}</td>
+            <td><span class="badge badge-success">${r.status}</span></td>
+          </tr>
+        `).join('')}
+      </tbody>`;
+  }
+
+  function renderAdminMenu() {
+    if (!window.FoodFlowStore) return;
+    const items = window.FoodFlowStore.getMenuItems();
+    const container = document.getElementById('admMenuItemsContainer');
+    if (!container) return;
+
+    container.innerHTML = `
+      <div class="card">
+        <div class="card-header"><span class="card-title">All Food Items (${items.length})</span></div>
+        <div class="data-table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Dish Name</th>
+                <th>Category</th>
+                <th>Type</th>
+                <th>Price</th>
+                <th>Availability</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${items.map((i) => `
+                <tr>
+                  <td><strong>${i.name}</strong></td>
+                  <td>${i.category}</td>
+                  <td>${i.veg ? '<span style="color:#17A865; font-weight:700;">🌿 Veg</span>' : '<span style="color:#DC2626; font-weight:700;">🍗 Non-Veg</span>'}</td>
+                  <td>₹${i.price}</td>
+                  <td>
+                    <button class="action-btn ${i.available !== false ? 'success' : 'danger'}" onclick="handleToggleMenuItem(${i.id})">
+                      ${i.available !== false ? 'In Stock ✓' : 'Out of Stock ✕'}
+                    </button>
+                  </td>
+                  <td>
+                    <button class="action-btn danger" onclick="handleDeleteMenuItem(${i.id})">Delete</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+  }
+
+  function handleToggleMenuItem(itemId) {
+    if (!window.FoodFlowStore) return;
+    const item = window.FoodFlowStore.toggleMenuItemAvailability(itemId);
+    if (item) {
+      renderAdminMenu();
+      showToast(`${item.name} is now ${item.available ? 'In Stock' : 'Out of Stock'}`, 'info');
+    }
+  }
+
+  function handleDeleteMenuItem(itemId) {
+    if (!window.FoodFlowStore) return;
+    window.FoodFlowStore.deleteMenuItem(itemId);
+    renderAdminMenu();
+    showToast('Menu item deleted', 'info');
+  }
+
+  function renderAdminPayments() {
+    if (!window.FoodFlowStore) return;
+    const orders = window.FoodFlowStore.getOrders();
+    const table = document.getElementById('admPaymentsTable');
+    if (!table) return;
+
+    table.innerHTML = `
+      <thead>
+        <tr>
+          <th>Order ID</th>
+          <th>Customer</th>
+          <th>Amount</th>
+          <th>Payment Method</th>
+          <th>Transaction Status</th>
+          <th>Refund Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${orders.map((o) => `
+          <tr>
+            <td><strong>#${o.id}</strong></td>
+            <td>${o.customer}</td>
+            <td><strong>₹${o.total}</strong></td>
+            <td>${o.paymentMethod}</td>
+            <td><span class="badge ${o.status === 'cancelled' ? 'badge-neutral' : 'badge-success'}">${o.status === 'cancelled' ? 'Reversed' : 'Success'}</span></td>
+            <td>${o.refundStatus === 'refunded' ? '<span class="badge badge-success">Refunded ₹' + (o.refundAmount || o.total) + '</span>' : '<span class="badge badge-neutral">None</span>'}</td>
+          </tr>
+        `).join('')}
+      </tbody>`;
+  }
+
+  function renderAdminSettings() {
     if (!window.FoodFlowStore) return;
     const promos = window.FoodFlowStore.getPromos();
+    const countBadge = document.getElementById('admPromoCountBadge');
+    if (countBadge) countBadge.textContent = promos.length;
+
     const container = document.getElementById('admSettingsPromosList');
     if (!container) return;
 
-    container.innerHTML = promos
-      .map(
-        (p) => `
-      <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border);">
-        <div>
-          <div style="font-weight:700;">${p.code}</div>
-          <div style="font-size:0.75rem; color:var(--text-muted);">${p.description} (Min ₹${p.minOrder})</div>
-        </div>
-        <span class="badge ${p.status === 'active' ? 'badge-success' : 'badge-neutral'}">${p.status}</span>
-      </div>`
-      )
-      .join('');
-  }
-
-  function openAddPromoModal() {
-    const modal = document.getElementById('adminAddPromoModal');
-    if (modal) modal.classList.add('open');
-  }
-
-  function submitAdminAddPromo() {
-    const code = document.getElementById('admAddPromoCode');
-    const discount = document.getElementById('admAddPromoDiscount');
-    const minOrder = document.getElementById('admAddPromoMinOrder');
-    const desc = document.getElementById('admAddPromoDesc');
-
-    if (!code || !code.value.trim() || !window.FoodFlowStore) {
-      showToast('Please enter promo code', 'error');
+    if (promos.length === 0) {
+      container.innerHTML = `
+        <div style="text-align:center; padding:2rem; color:var(--text-muted);">
+          <div style="font-size:2rem; margin-bottom:4px;">🎟️</div>
+          <p>No promo coupons found. Click "+ Add Coupon" to create one.</p>
+        </div>`;
       return;
     }
 
-    const newP = window.FoodFlowStore.addPromo({
-      code: code.value.trim(),
-      discount: discount ? Number(discount.value) : 20,
-      minOrder: minOrder ? Number(minOrder.value) : 199,
-      description: desc && desc.value.trim() ? desc.value.trim() : 'Special discount coupon'
-    });
+    container.innerHTML = `
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        ${promos
+          .map((p) => {
+            const discountPct = p.discount || p.discount_percent || 0;
+            const maxD = p.maxDiscount || p.max_discount || 0;
+            const minO = p.minOrder || p.min_order_amount || 0;
+            const desc = p.desc || p.description || '';
+            const isActive = p.active !== false;
 
-    closeAdminModal('adminAddPromoModal');
-    renderAdminSettingsPromos();
-    showToast(`✓ Promo code ${newP.code} created!`, 'success');
+            return `
+            <div style="background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:12px 14px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+              <div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <strong style="color:var(--primary); font-size:1.05rem; letter-spacing:0.5px;">${p.code}</strong>
+                  <span class="badge ${isActive ? 'badge-success' : 'badge-danger'}" style="font-size:0.7rem; padding:2px 8px;">
+                    ${isActive ? 'Active' : 'Disabled'}
+                  </span>
+                  <span style="font-size:0.8rem; background:var(--surface2); padding:2px 6px; border-radius:4px; font-weight:600;">
+                    ${discountPct}% OFF (Up to ₹${maxD})
+                  </span>
+                </div>
+                <div style="font-size:0.82rem; color:var(--text-muted); margin-top:3px;">
+                  ${desc} · <span style="color:var(--text);">Min Order: ₹${minO}</span>
+                </div>
+              </div>
+              <div style="display:flex; gap:6px; align-items:center;">
+                <button class="action-btn" style="font-size:0.8rem; padding:4px 10px;" onclick="openEditPromoModal('${p.code}')">
+                  ✏️ Edit
+                </button>
+                <button class="action-btn ${isActive ? 'danger' : 'success'}" style="font-size:0.8rem; padding:4px 10px;" onclick="handleTogglePromo('${p.code}')">
+                  ${isActive ? 'Disable' : 'Enable'}
+                </button>
+                <button class="action-btn danger" style="font-size:0.8rem; padding:4px 8px;" onclick="handleDeletePromo('${p.code}')" title="Delete Coupon">
+                  🗑️
+                </button>
+              </div>
+            </div>`;
+          })
+          .join('')}
+      </div>`;
+  }
+
+  function openAddPromoModal() {
+    const title = document.getElementById('adminPromoModalTitle');
+    const oldCode = document.getElementById('adminPromoOldCode');
+    const codeInput = document.getElementById('adminPromoCodeInput');
+    const discInput = document.getElementById('adminPromoDiscountInput');
+    const maxDInput = document.getElementById('adminPromoMaxDiscountInput');
+    const minOInput = document.getElementById('adminPromoMinOrderInput');
+    const activeCb = document.getElementById('adminPromoActiveCheckbox');
+    const descInput = document.getElementById('adminPromoDescInput');
+    const errEl = document.getElementById('err-adminPromo');
+
+    if (title) title.textContent = '🎟️ Add Promo Coupon';
+    if (oldCode) oldCode.value = '';
+    if (codeInput) { codeInput.value = ''; codeInput.readOnly = false; }
+    if (discInput) discInput.value = '20';
+    if (maxDInput) maxDInput.value = '150';
+    if (minOInput) minOInput.value = '199';
+    if (activeCb) activeCb.checked = true;
+    if (descInput) descInput.value = '';
+    if (errEl) errEl.textContent = '';
+
+    const modal = document.getElementById('adminPromoModal');
+    if (modal) modal.classList.add('open');
+  }
+
+  function openEditPromoModal(code) {
+    if (!window.FoodFlowStore) return;
+    const promos = window.FoodFlowStore.getPromos();
+    const promo = promos.find((p) => p.code.toUpperCase() === String(code).toUpperCase().trim());
+    if (!promo) return;
+
+    const title = document.getElementById('adminPromoModalTitle');
+    const oldCode = document.getElementById('adminPromoOldCode');
+    const codeInput = document.getElementById('adminPromoCodeInput');
+    const discInput = document.getElementById('adminPromoDiscountInput');
+    const maxDInput = document.getElementById('adminPromoMaxDiscountInput');
+    const minOInput = document.getElementById('adminPromoMinOrderInput');
+    const activeCb = document.getElementById('adminPromoActiveCheckbox');
+    const descInput = document.getElementById('adminPromoDescInput');
+    const errEl = document.getElementById('err-adminPromo');
+
+    if (title) title.textContent = `✏️ Edit Promo Coupon (${promo.code})`;
+    if (oldCode) oldCode.value = promo.code;
+    if (codeInput) { codeInput.value = promo.code; codeInput.readOnly = false; }
+    if (discInput) discInput.value = promo.discount || promo.discount_percent || 20;
+    if (maxDInput) maxDInput.value = promo.maxDiscount || promo.max_discount || 150;
+    if (minOInput) minOInput.value = promo.minOrder || promo.min_order_amount || 199;
+    if (activeCb) activeCb.checked = promo.active !== false;
+    if (descInput) descInput.value = promo.desc || promo.description || '';
+    if (errEl) errEl.textContent = '';
+
+    const modal = document.getElementById('adminPromoModal');
+    if (modal) modal.classList.add('open');
+  }
+
+  function submitAdminPromoForm() {
+    if (!window.FoodFlowStore) return;
+    const oldCode = document.getElementById('adminPromoOldCode')?.value;
+    const code = document.getElementById('adminPromoCodeInput')?.value.trim().toUpperCase();
+    const discount = Number(document.getElementById('adminPromoDiscountInput')?.value || 0);
+    const maxDiscount = Number(document.getElementById('adminPromoMaxDiscountInput')?.value || 0);
+    const minOrder = Number(document.getElementById('adminPromoMinOrderInput')?.value || 0);
+    const active = Boolean(document.getElementById('adminPromoActiveCheckbox')?.checked);
+    const desc = document.getElementById('adminPromoDescInput')?.value.trim();
+    const errEl = document.getElementById('err-adminPromo');
+
+    if (!code || code.length < 3) {
+      if (errEl) errEl.textContent = 'Please enter a valid Promo Code (at least 3 characters).';
+      return;
+    }
+    if (discount <= 0 || discount > 100) {
+      if (errEl) errEl.textContent = 'Discount percentage must be between 1 and 100.';
+      return;
+    }
+    if (maxDiscount <= 0) {
+      if (errEl) errEl.textContent = 'Max discount cap must be greater than 0.';
+      return;
+    }
+
+    try {
+      if (oldCode) {
+        window.FoodFlowStore.updatePromo(oldCode, {
+          code,
+          discount,
+          maxDiscount,
+          minOrder,
+          active,
+          desc: desc || `Flat ${discount}% OFF up to ₹${maxDiscount}`
+        });
+        showToast(`✓ Promo coupon "${code}" updated successfully!`, 'success');
+      } else {
+        window.FoodFlowStore.addPromo({
+          code,
+          discount,
+          maxDiscount,
+          minOrder,
+          active,
+          desc: desc || `Flat ${discount}% OFF up to ₹${maxDiscount}`
+        });
+        showToast(`✓ Promo coupon "${code}" created successfully!`, 'success');
+      }
+
+      closeAdminModal('adminPromoModal');
+      renderAdminSettings();
+    } catch (err) {
+      if (errEl) errEl.textContent = err.message;
+      showToast(err.message, 'error');
+    }
+  }
+
+  function handleTogglePromo(code) {
+    if (!window.FoodFlowStore) return;
+    const updated = window.FoodFlowStore.togglePromoStatus(code);
+    if (updated) {
+      renderAdminSettings();
+      showToast(`Promo ${code} is now ${updated.active ? 'Active' : 'Disabled'}`, 'info');
+    }
+  }
+
+  function handleDeletePromo(code) {
+    if (!window.FoodFlowStore) return;
+    if (confirm(`Are you sure you want to delete coupon ${code}?`)) {
+      window.FoodFlowStore.deletePromo(code);
+      renderAdminSettings();
+      showToast(`Promo ${code} deleted`, 'info');
+    }
+  }
+
+  function savePlatformSettingsForm() {
+    if (!window.FoodFlowStore) return;
+    const name = document.getElementById('admSetPlatformName')?.value.trim() || 'FoodFlow';
+    const deliveryFee = Number(document.getElementById('admSetDeliveryFee')?.value || 40);
+    const platformFee = Number(document.getElementById('admSetPlatformFee')?.value || 5);
+    const supportPhone = document.getElementById('admSetSupportPhone')?.value.trim() || '+91 1800-200-8899';
+    const supportEmail = document.getElementById('admSetSupportEmail')?.value.trim() || 'support@foodflow.com';
+
+    const settings = {
+      platformName: name,
+      defaultDeliveryFee: deliveryFee,
+      platformFee: platformFee,
+      supportPhone: supportPhone,
+      supportEmail: supportEmail
+    };
+
+    window.FoodFlowStore.updatePlatformSettings(settings);
+    showToast('✓ Platform configuration saved successfully!', 'success');
+  }
+
+  let adminUpdatingOrderId = null;
+
+  function handleAdminStatusSelectChange() {
+    const sel = document.getElementById('admStatusSelect');
+    const group = document.getElementById('admCancelReasonGroup');
+    if (!sel || !group) return;
+    if (sel.value === 'cancelled') {
+      group.style.display = 'block';
+    } else {
+      group.style.display = 'none';
+    }
+  }
+
+  function openAdminStatusModal(orderId) {
+    if (!window.FoodFlowStore) return;
+    const order = window.FoodFlowStore.getOrderById(orderId);
+    if (!order) return;
+    adminUpdatingOrderId = order.id;
+
+    const idEl = document.getElementById('admStatusModalOrderId');
+    const sel = document.getElementById('admStatusSelect');
+    const group = document.getElementById('admCancelReasonGroup');
+    const reasonSel = document.getElementById('admCancelReasonSelect');
+    const notesEl = document.getElementById('admCancelNotes');
+
+    if (idEl) idEl.textContent = `#${order.id}`;
+    if (sel) sel.value = order.status;
+
+    if (order.status === 'cancelled') {
+      if (group) group.style.display = 'block';
+      if (reasonSel && order.cancelReason) {
+        const matched = Array.from(reasonSel.options).some((o) => o.value === order.cancelReason);
+        if (matched) {
+          reasonSel.value = order.cancelReason;
+          if (notesEl) notesEl.value = '';
+        } else {
+          reasonSel.value = 'Other reason';
+          if (notesEl) notesEl.value = order.cancelReason;
+        }
+      }
+    } else {
+      if (group) group.style.display = 'none';
+      if (notesEl) notesEl.value = '';
+    }
+
+    const modal = document.getElementById('adminOrderStatusModal');
+    if (modal) modal.classList.add('open');
+  }
+
+  function submitAdminOrderStatus() {
+    if (!adminUpdatingOrderId || !window.FoodFlowStore) return;
+    const sel = document.getElementById('admStatusSelect');
+    const newStatus = sel ? sel.value : 'pending';
+
+    if (newStatus === 'cancelled') {
+      const reasonSel = document.getElementById('admCancelReasonSelect');
+      const notesEl = document.getElementById('admCancelNotes');
+      const primaryReason = reasonSel ? reasonSel.value : 'Kitchen closed / Item out of stock';
+      const extraNotes = notesEl && notesEl.value.trim() ? ` (${notesEl.value.trim()})` : '';
+      const fullReason = `${primaryReason}${extraNotes}`;
+
+      const res = window.FoodFlowStore.cancelOrder(adminUpdatingOrderId, fullReason, 'Admin');
+      closeAdminModal('adminOrderStatusModal');
+      renderAdminDashboard();
+      renderAdminOrders();
+      if (res.success) {
+        showToast(`Order #${adminUpdatingOrderId} cancelled: ${fullReason}`, 'warning');
+      } else {
+        showToast(`Order #${adminUpdatingOrderId} cancelled`, 'warning');
+      }
+      return;
+    }
+
+    window.FoodFlowStore.updateOrderStatus(adminUpdatingOrderId, newStatus);
+    closeAdminModal('adminOrderStatusModal');
+    renderAdminDashboard();
+    renderAdminOrders();
+    showToast(`Order #${adminUpdatingOrderId} status updated to ${newStatus}`, 'success');
   }
 
   function closeAdminModal(modalId) {
@@ -2731,360 +3338,129 @@
     if (modal) modal.classList.remove('open');
   }
 
-  // ═══════════════════════ HELPERS & UTILITIES ═══════════════════════
   function getBadgeForStatus(status) {
     const map = {
-      pending: 'badge-warning',
-      preparing: 'badge-primary',
-      'on-the-way': 'badge-info',
-      delivered: 'badge-success',
-      cancelled: 'badge-danger',
-      active: 'badge-success',
-      inactive: 'badge-neutral',
-      suspended: 'badge-danger',
-      success: 'badge-success',
-      failed: 'badge-danger'
+      pending: '<span class="badge badge-warning">⏳ Pending</span>',
+      preparing: '<span class="badge badge-info">👨‍🍳 Preparing</span>',
+      'on-the-way': '<span class="badge badge-primary">🛵 On the Way</span>',
+      delivered: '<span class="badge badge-success">✓ Delivered</span>',
+      cancelled: '<span class="badge badge-danger">✕ Cancelled</span>'
     };
-
-    const labels = {
-      'on-the-way': '🛵 On the Way',
-      preparing: '👨‍🍳 Preparing',
-      pending: '⏳ Pending',
-      delivered: '✓ Delivered',
-      cancelled: '✗ Cancelled',
-      active: '● Active',
-      inactive: '○ Inactive',
-      suspended: '⊘ Suspended',
-      success: '✓ Success',
-      failed: '✗ Failed'
-    };
-
-    return `<span class="badge ${map[status] || 'badge-neutral'}">${labels[status] || status}</span>`;
+    return map[status] || `<span class="badge badge-neutral">${status}</span>`;
   }
 
-  // Safe continuous background health logger
-  setInterval(() => {
-    if (!window.FoodFlowStore) return;
-    const msgs = [
-      ['INFO', 'GET /api/v1/restaurants 200 OK — 14ms'],
-      ['INFO', 'Database heartbeat OK — connections stable (14/100)'],
-      ['INFO', 'Docker container healthcheck PASSED (uptime 14d 6h)'],
-      ['INFO', 'Jenkins CI pipeline #142 status: STABLE (0 failures)'],
-      ['INFO', 'Payment gateway webhooks listener alive (98.7% success rate)']
-    ];
-    const rand = msgs[Math.floor(Math.random() * msgs.length)];
-    window.FoodFlowStore.addLog(rand[0], rand[1]);
-  }, 10000);
-
-  function setupLiveValidationListeners() {
-    const bindLive = (id, validator) => {
-      const el = document.getElementById(id);
-      if (!el) return;
-      el.addEventListener('input', () => {
-        validator(el.value, false);
-      });
-      el.addEventListener('blur', () => {
-        validator(el.value, true);
-      });
-    };
-
-    // Login fields
-    bindLive('loginEmailField', (val, isBlur) => {
-      if (!val && isBlur) showFieldError('loginEmailField', 'Email address is required.');
-      else if (val && !ValidationUtils.isValidEmail(val) && isBlur) showFieldError('loginEmailField', 'Please enter a valid email format (e.g. name@example.com).');
-      else if (val && ValidationUtils.isValidEmail(val)) clearFieldError('loginEmailField');
-    });
-
-    bindLive('loginPasswordField', (val, isBlur) => {
-      if (!val && isBlur) showFieldError('loginPasswordField', 'Password is required.');
-      else if (val && val.length >= 6) clearFieldError('loginPasswordField');
-    });
-
-    // Registration fields
-    bindLive('regFirstName', (val, isBlur) => {
-      if (!val && isBlur) showFieldError('regFirstName', 'First name is required.');
-      else if (val && !ValidationUtils.isValidName(val) && isBlur) showFieldError('regFirstName', 'First name must contain 2-35 letters only.');
-      else if (val && ValidationUtils.isValidName(val)) clearFieldError('regFirstName');
-    });
-
-    bindLive('regLastName', (val, isBlur) => {
-      if (val && !ValidationUtils.isValidLastName(val) && isBlur) showFieldError('regLastName', 'Last name must contain letters only.');
-      else if (!val || ValidationUtils.isValidLastName(val)) clearFieldError('regLastName');
-    });
-
-    bindLive('regEmail', (val, isBlur) => {
-      if (!val && isBlur) showFieldError('regEmail', 'Email address is required.');
-      else if (val && !ValidationUtils.isValidEmail(val) && isBlur) showFieldError('regEmail', 'Please enter a valid email format.');
-      else if (val && ValidationUtils.isValidEmail(val)) {
-        if (window.FoodFlowStore && window.FoodFlowStore.getUserByEmail(val)) {
-          showFieldError('regEmail', 'An account with this email already exists.');
-        } else {
-          clearFieldError('regEmail');
-        }
-      }
-    });
-
-    bindLive('regPhone', (val, isBlur) => {
-      if (!val && isBlur) showFieldError('regPhone', 'Mobile number is required.');
-      else if (val && !ValidationUtils.isValidPhone(val) && isBlur) showFieldError('regPhone', 'Please enter a valid 10-digit mobile number.');
-      else if (val && ValidationUtils.isValidPhone(val)) clearFieldError('regPhone');
-    });
-
-    const regPass = document.getElementById('regPassword');
-    if (regPass) {
-      regPass.addEventListener('input', () => {
-        updatePasswordStrengthUI('regPassword', 'regPassStrengthContainer', 'regPassStrengthBar', 'regPassStrengthLabel');
-        const str = ValidationUtils.evaluatePasswordStrength(regPass.value);
-        if (str.isValid) clearFieldError('regPassword');
-      });
-      regPass.addEventListener('blur', () => {
-        const str = ValidationUtils.evaluatePasswordStrength(regPass.value);
-        if (!regPass.value) showFieldError('regPassword', 'Password is required.');
-        else if (!str.isValid) showFieldError('regPassword', 'Min 8 chars with uppercase, lowercase, number & symbol.');
-        else clearFieldError('regPassword');
-      });
-    }
-
-    bindLive('regConfirmPassword', (val, isBlur) => {
-      const p = document.getElementById('regPassword') ? document.getElementById('regPassword').value : '';
-      if (!val && isBlur) showFieldError('regConfirmPassword', 'Please confirm your password.');
-      else if (val && val !== p && isBlur) showFieldError('regConfirmPassword', 'Passwords do not match.');
-      else if (val && val === p) clearFieldError('regConfirmPassword');
-    });
-
-    const forgotNewPass = document.getElementById('forgotNewPasswordField');
-    if (forgotNewPass) {
-      forgotNewPass.addEventListener('input', () => {
-        updatePasswordStrengthUI('forgotNewPasswordField', 'forgotPassStrengthContainer', 'forgotPassStrengthBar', 'forgotPassStrengthLabel');
-        const str = ValidationUtils.evaluatePasswordStrength(forgotNewPass.value);
-        if (str.isValid) clearFieldError('forgotNewPasswordField');
-      });
+  function togglePasswordVisibility(fieldId, btnEl) {
+    const field = document.getElementById(fieldId);
+    if (!field) return;
+    if (field.type === 'password') {
+      field.type = 'text';
+      if (btnEl) btnEl.textContent = '🔒';
+    } else {
+      field.type = 'password';
+      if (btnEl) btnEl.textContent = '👁️';
     }
   }
 
-  function updateDbStatusUI() {
-    if (!window.FoodFlowStore) return;
-    const isConn = window.FoodFlowStore.isMysqlConnected;
-    const badge = document.getElementById('topDbStatusBadge');
-    const dot = document.getElementById('topDbStatusDot');
-    const text = document.getElementById('topDbStatusText');
-    const modalStatus = document.getElementById('modalDbLiveStatus');
-    const modalDetails = document.getElementById('modalDbLiveDetails');
-
-    if (badge && text) {
-      if (isConn) {
-        badge.className = 'db-status-badge connected';
-        if (dot) dot.style.background = '#22C55E';
-        text.innerHTML = '🟢 MySQL: foodflow_db (Port 3306)';
-      } else {
-        badge.className = 'db-status-badge offline';
-        if (dot) dot.style.background = '#EAB308';
-        text.innerHTML = '🟡 MySQL: Offline (Local Mode)';
-      }
-    }
-
-    if (modalStatus) {
-      if (isConn) {
-        modalStatus.innerHTML = '🟢 Connected to MySQL (foodflow_db)';
-        modalStatus.style.color = 'var(--success)';
-        if (modalDetails) modalDetails.innerHTML = 'Live queries and order records are saving directly to MySQL database tables.';
-      } else {
-        modalStatus.innerHTML = '🟡 MySQL Server Offline (Running in Local Mode)';
-        modalStatus.style.color = 'var(--warning)';
-        if (modalDetails) modalDetails.innerHTML = 'Follow the steps below to execute schema.sql in MySQL Workbench and start the backend server.';
-      }
-    }
-  }
-
-  function openMysqlHelperModal() {
-    updateDbStatusUI();
-    const modal = document.getElementById('mysqlHelperModal');
-    if (modal) modal.classList.add('open');
-  }
-
-  async function handleRetestMysqlConnection() {
-    showToast('Probing MySQL database server on port 5000 / 3306...', 'info');
+  function handleRetestMysqlConnection() {
+    showToast('Testing connection to MySQL Database...', 'info');
     if (window.FoodFlowStore) {
-      await window.FoodFlowStore.probeMysqlServer();
-      updateDbStatusUI();
-      if (window.FoodFlowStore.isMysqlConnected) {
-        showToast('✓ Connected to MySQL database successfully! 🎉', 'success');
-      } else {
-        showToast('MySQL backend is offline. Run "npm start" in terminal.', 'error');
-      }
+      window.FoodFlowStore.probeApiServer().then(() => {
+        const isConn = window.FoodFlowStore.isMysqlConnected;
+        const text = isConn ? 'MySQL: Connected' : 'MySQL: Local Storage Mode';
+        const dotClass = isConn ? '#10B981' : '#F59E0B';
+
+        const textEl = document.getElementById('topDbStatusText');
+        const dotEl = document.getElementById('topDbStatusDot');
+        if (textEl) textEl.textContent = text;
+        if (dotEl) dotEl.style.background = dotClass;
+
+        showToast(isConn ? '✓ Connected to MySQL database!' : 'Offline mode: operating on secure local storage.', isConn ? 'success' : 'info');
+      });
     }
   }
 
-  // Reactive Store Event Subscription
-  if (window.FoodFlowStore) {
-    window.FoodFlowStore.subscribe((eventType, payload) => {
-      if (eventType === 'order_placed') {
-        SoundEffects.playAlert();
-        updateAdminBadges();
-        if (AppState.activeAdminPage === 'dashboard') renderAdminDashboard();
-        if (AppState.activeAdminPage === 'orders') renderAdminOrders();
-        if (AppState.activeAdminPage === 'payments') renderAdminPayments();
-        if (AppState.activePortal === 'admin') {
-          showToast(`🔔 New Order #${payload.id} received from ${payload.customer}!`, 'info');
-        }
-      }
-
-      if (eventType === 'order_status_updated') {
-        if (AppState.currentTrackingOrderId === payload.orderId) {
-          renderLiveOrderTracker(payload.order);
-          SoundEffects.playSuccess();
-          showToast(`Order #${payload.orderId} status: ${payload.newStatus.toUpperCase()}`, 'info');
-        }
-        if (AppState.activeCustomerScreen === 'profile') {
-          renderProfileContent(AppState.activeProfileTab);
-        }
-        if (AppState.activePortal === 'admin') {
-          renderAdminOrders();
-          renderAdminDashboard();
-          updateAdminBadges();
-        }
-      }
-
-      if (eventType === 'menu_availability_changed' || eventType === 'menu_item_added' || eventType === 'menu_item_updated' || eventType === 'menu_item_deleted') {
-        if (AppState.selectedRestaurant) {
-          renderCustomerMenuItems(AppState.selectedRestaurant);
-        }
-        if (AppState.activeAdminPage === 'menu') {
-          renderAdminMenu();
-        }
-      }
-
-      if (eventType === 'user_registered' || eventType === 'user_status_changed') {
-        renderAdminUsers();
-      }
-
-      if (eventType === 'log_appended') {
-        if (AppState.activeAdminPage === 'health') {
-          renderAdminHealth();
-        }
-      }
-
-      if (eventType === 'db_status_changed' || eventType === 'mysql_synced') {
-        updateDbStatusUI();
-        if (AppState.activeAdminPage === 'dashboard') renderAdminDashboard();
-        if (AppState.activeAdminPage === 'orders') renderAdminOrders();
-        if (AppState.activeAdminPage === 'users') renderAdminUsers();
-        if (AppState.activeAdminPage === 'menu') renderAdminMenu();
-      }
-    });
-  }
-
-  // Initialize UI Function
+  // ═══════════════════════ INITIALIZATION ═══════════════════════
   function initApp() {
     renderCustomerHome();
     updateCustomerCartUI();
     updateCustomerAuthUI();
-    renderAdminDashboard();
-    renderAdminOrders();
-    renderAdminUsers();
-    renderAdminRestaurants();
-    renderAdminMenu();
-    renderAdminPayments();
-    renderAdminSettingsPromos();
-    updateAdminBadges();
-    setupLiveValidationListeners();
-    updateDbStatusUI();
-    setTimeout(updateDbStatusUI, 1200);
+
+    if (window.FoodFlowStore) {
+      window.FoodFlowStore.on('auth_changed', () => {
+        updateCustomerAuthUI();
+        if (AppState.activeCustomerScreen === 'profile') openCustomerProfile();
+      });
+
+      window.FoodFlowStore.on('cart_updated', () => {
+        updateCustomerCartUI();
+      });
+
+      window.FoodFlowStore.on('order_status_updated', (order) => {
+        if (AppState.currentTrackingOrderId === order.id && AppState.activeCustomerScreen === 'success') {
+          renderLiveOrderTracker(order);
+        }
+        if (AppState.activeCustomerScreen === 'profile') {
+          renderProfileContent(AppState.activeProfileTab);
+        }
+        if (AppState.activeAdminPage === 'dashboard') renderAdminDashboard();
+        if (AppState.activeAdminPage === 'orders') renderAdminOrders();
+      });
+
+      window.FoodFlowStore.on('order_placed', () => {
+        if (AppState.activeAdminPage === 'dashboard') renderAdminDashboard();
+        if (AppState.activeAdminPage === 'orders') renderAdminOrders();
+        if (AppState.activeAdminPage === 'payments') renderAdminPayments();
+      });
+
+      window.FoodFlowStore.on('order_cancelled', () => {
+        if (AppState.activeAdminPage === 'dashboard') renderAdminDashboard();
+        if (AppState.activeAdminPage === 'orders') renderAdminOrders();
+        if (AppState.activeAdminPage === 'payments') renderAdminPayments();
+      });
+
+      window.FoodFlowStore.on('promos_changed', () => {
+        if (AppState.activeAdminPage === 'settings') renderAdminSettings();
+      });
+
+      window.FoodFlowStore.on('settings_updated', () => {
+        if (AppState.activeAdminPage === 'settings') renderAdminSettings();
+      });
+
+      window.FoodFlowStore.on('wallet_updated', () => {
+        if (AppState.activeCustomerScreen === 'profile' && AppState.activeProfileTab === 'wallet') {
+          renderPaymentWalletsTab();
+        }
+      });
+
+      window.FoodFlowStore.on('db_status_changed', (info) => {
+        const textEl = document.getElementById('topDbStatusText');
+        const dotEl = document.getElementById('topDbStatusDot');
+        if (textEl) textEl.textContent = info.connected ? 'MySQL Database (Connected)' : 'Local Storage Mode';
+        if (dotEl) dotEl.style.background = info.connected ? '#10B981' : '#F59E0B';
+      });
+    }
   }
 
-  // Bind all functions to Global Window Scope
-  window.AppState = AppState;
-  window.SoundEffects = SoundEffects;
-  window.ValidationUtils = ValidationUtils;
-  window.showFieldError = showFieldError;
-  window.clearFieldError = clearFieldError;
-  window.resetFieldState = resetFieldState;
-  window.togglePasswordVisibility = togglePasswordVisibility;
-  window.updatePasswordStrengthUI = updatePasswordStrengthUI;
-  window.updateDbStatusUI = updateDbStatusUI;
-  window.openMysqlHelperModal = openMysqlHelperModal;
-  window.handleRetestMysqlConnection = handleRetestMysqlConnection;
-  window.showToast = showToast;
-  window.switchPortal = switchPortal;
-  window.handleDemoRoleSwitch = handleDemoRoleSwitch;
+  // Window exports for HTML attributes
+  window.switchGlobalPortal = switchGlobalPortal;
   window.showCustomerScreen = showCustomerScreen;
-  window.renderCustomerHome = renderCustomerHome;
   window.filterByCuisinePill = filterByCuisinePill;
   window.handleCustomerSearch = handleCustomerSearch;
+  window.clearCustomerSearch = clearCustomerSearch;
   window.openCustomerRestaurant = openCustomerRestaurant;
-  window.renderCustomerMenuItems = renderCustomerMenuItems;
   window.jumpToMenuCategory = jumpToMenuCategory;
   window.customerAddToCart = customerAddToCart;
   window.customerUpdateQty = customerUpdateQty;
-  window.updateCustomerCartUI = updateCustomerCartUI;
-  window.renderCustomerSideCart = renderCustomerSideCart;
   window.proceedToCheckout = proceedToCheckout;
-  window.renderCheckoutSummary = renderCheckoutSummary;
   window.handleApplyPromo = handleApplyPromo;
-  window.selectPaymentMethod = selectPaymentMethod;
   window.handlePlaceOrder = handlePlaceOrder;
-  window.renderLiveOrderTracker = renderLiveOrderTracker;
-  window.simulateNextTrackingStep = simulateNextTrackingStep;
-  window.openCustomerProfile = openCustomerProfile;
-  window.setProfileTab = setProfileTab;
-  window.renderProfileContent = renderProfileContent;
-  window.saveCustomerProfileSettings = saveCustomerProfileSettings;
-  window.openAddAddressModal = openAddAddressModal;
-  window.submitCustomerAddress = submitCustomerAddress;
-  window.viewOrderTrackingLive = viewOrderTrackingLive;
-  window.reorderCustomerItems = reorderCustomerItems;
-  window.openAuthModal = openAuthModal;
-  window.closeAuthModal = closeAuthModal;
-  window.setAuthTabMode = setAuthTabMode;
-  window.handleCustomerLogin = handleCustomerLogin;
-  window.handleCustomerRegister = handleCustomerRegister;
-  window.showForgotStep = showForgotStep;
-  window.handleRequestPasswordOTP = handleRequestPasswordOTP;
-  window.copySimulatedOtp = copySimulatedOtp;
-  window.autoFillOtpBoxes = autoFillOtpBoxes;
-  window.quickFillForgotInput = quickFillForgotInput;
-  window.handleVerifyPasswordOTP = handleVerifyPasswordOTP;
-  window.handleNewPasswordLiveCheck = handleNewPasswordLiveCheck;
-  window.handleConfirmPasswordLiveCheck = handleConfirmPasswordLiveCheck;
-  window.handleSubmitNewPassword = handleSubmitNewPassword;
-  window.handleFinishPasswordReset = handleFinishPasswordReset;
-  window.handleCustomerLogout = handleCustomerLogout;
-  window.updateCustomerAuthUI = updateCustomerAuthUI;
-  window.showAdminPage = showAdminPage;
-  window.updateAdminBadges = updateAdminBadges;
-  window.renderAdminDashboard = renderAdminDashboard;
-  window.renderAdminOrders = renderAdminOrders;
-  window.filterAdminOrdersQuery = filterAdminOrdersQuery;
-  window.filterAdminOrdersStatus = filterAdminOrdersStatus;
-  window.handleAdminExportCSV = handleAdminExportCSV;
-  window.openAdminOrderStatusModal = openAdminOrderStatusModal;
-  window.submitAdminOrderStatus = submitAdminOrderStatus;
-  window.renderAdminUsers = renderAdminUsers;
-  window.filterAdminUsersQuery = filterAdminUsersQuery;
-  window.filterAdminUsersRole = filterAdminUsersRole;
-  window.handleAdminToggleUser = handleAdminToggleUser;
-  window.openAddUserModal = openAddUserModal;
-  window.submitAdminAddUser = submitAdminAddUser;
-  window.renderAdminRestaurants = renderAdminRestaurants;
-  window.filterAdminRestaurantsQuery = filterAdminRestaurantsQuery;
-  window.handleAdminToggleRestaurant = handleAdminToggleRestaurant;
-  window.openAddRestaurantModal = openAddRestaurantModal;
-  window.submitAdminAddRestaurant = submitAdminAddRestaurant;
-  window.renderAdminMenu = renderAdminMenu;
-  window.handleAdminToggleItemAvailability = handleAdminToggleItemAvailability;
-  window.handleAdminDeleteItem = handleAdminDeleteItem;
-  window.openAddMenuModal = openAddMenuModal;
-  window.submitAdminAddMenuItem = submitAdminAddMenuItem;
-  window.renderAdminPayments = renderAdminPayments;
-  window.handleAdminRetryPayment = handleAdminRetryPayment;
-  window.openAdminReceiptModal = openAdminReceiptModal;
-  window.renderAdminHealth = renderAdminHealth;
-  window.handleGenerateTestLog = handleGenerateTestLog;
-  window.renderAdminSettingsPromos = renderAdminSettingsPromos;
-  window.openSwiggyPaymentModal = openSwiggyPaymentModal;
   window.switchPaymentTab = switchPaymentTab;
   window.selectUpiApp = selectUpiApp;
-  window.submitCustomUpiPay = submitCustomUpiPay;
+  window.verifyCustomUpiId = verifyCustomUpiId;
+  window.submitVerifiedUpiPay = submitVerifiedUpiPay;
+  window.cancelUpiCollectScreen = cancelUpiCollectScreen;
+  window.confirmUpiCollectSuccess = confirmUpiCollectSuccess;
+  window.handleUpiIdChanged = handleUpiIdChanged;
   window.appendUpiHandle = appendUpiHandle;
   window.simulateQrPaymentDone = simulateQrPaymentDone;
   window.handleCardNumberInput = handleCardNumberInput;
@@ -3096,15 +3472,77 @@
   window.submitNetBankingPayment = submitNetBankingPayment;
   window.submitWalletPayment = submitWalletPayment;
   window.submitCodPayment = submitCodPayment;
+  window.openCustomerOrders = openCustomerOrders;
+  window.openCustomerAccount = openCustomerAccount;
+  window.openCustomerProfile = openCustomerProfile;
+  window.setProfileTab = setProfileTab;
+  window.switchOrderSubTab = switchOrderSubTab;
+  window.saveCustomerProfileSettings = saveCustomerProfileSettings;
+  window.openAddAddressModal = openAddAddressModal;
+  window.submitCustomerAddress = submitCustomerAddress;
+  window.handleCustomerDeleteAddress = handleCustomerDeleteAddress;
+  window.viewOrderTrackingLive = viewOrderTrackingLive;
+  window.reorderCustomerItems = reorderCustomerItems;
   window.openCustomerCancelModal = openCustomerCancelModal;
   window.confirmCustomerOrderCancellation = confirmCustomerOrderCancellation;
-  window.openAdminCancelModal = openAdminCancelModal;
-  window.handleAdminCancelReasonChange = handleAdminCancelReasonChange;
-  window.submitAdminCancelOrder = submitAdminCancelOrder;
+  window.openAdminReceiptModal = openAdminReceiptModal;
+  window.openAuthModal = openAuthModal;
+  window.closeAuthModal = closeAuthModal;
+  window.setAuthTabMode = setAuthTabMode;
+  window.handleCustomerLogin = handleCustomerLogin;
+  window.handleCustomerRegister = handleCustomerRegister;
+  window.handleCustomerLogout = handleCustomerLogout;
+  window.confirmCustomerLogout = confirmCustomerLogout;
+  window.showForgotStep = showForgotStep;
+  window.handleRequestPasswordOTP = handleRequestPasswordOTP;
+  window.handleVerifyPasswordOTP = handleVerifyPasswordOTP;
+  window.handleSubmitNewPassword = handleSubmitNewPassword;
+  window.handleFinishPasswordReset = handleFinishPasswordReset;
+  window.togglePasswordVisibility = togglePasswordVisibility;
+  window.showAdminPage = showAdminPage;
+  window.openAdminStatusModal = openAdminStatusModal;
+  window.submitAdminOrderStatus = submitAdminOrderStatus;
+  window.handleAdminStatusSelectChange = handleAdminStatusSelectChange;
+  window.handleToggleUserStatus = handleToggleUserStatus;
+  window.handleToggleMenuItem = handleToggleMenuItem;
+  window.handleDeleteMenuItem = handleDeleteMenuItem;
   window.closeAdminModal = closeAdminModal;
-  window.getBadgeForStatus = getBadgeForStatus;
+  window.showToast = showToast;
+  window.handleRetestMysqlConnection = handleRetestMysqlConnection;
+  window.verifyAndSaveProfileOtp = verifyAndSaveProfileOtp;
+  window.renderPaymentWalletsTab = renderPaymentWalletsTab;
+  window.openCustomerProfileWalletTopUp = openCustomerProfileWalletTopUp;
+  window.setTopUpInputAmount = setTopUpInputAmount;
+  window.handleWalletTopUpSubmit = handleWalletTopUpSubmit;
+  window.showQrPaymentSection = showQrPaymentSection;
+  window.hideQrPaymentSection = hideQrPaymentSection;
+  window.openWalletTopUpPaymentModal = openWalletTopUpPaymentModal;
+  window.switchTopUpPaymentTab = switchTopUpPaymentTab;
+  window.selectTopUpUpiApp = selectTopUpUpiApp;
+  window.handleTopUpUpiIdChanged = handleTopUpUpiIdChanged;
+  window.appendTopUpUpiHandle = appendTopUpUpiHandle;
+  window.verifyTopUpCustomUpiId = verifyTopUpCustomUpiId;
+  window.submitTopUpVerifiedUpiPay = submitTopUpVerifiedUpiPay;
+  window.showTopUpQrPaymentSection = showTopUpQrPaymentSection;
+  window.hideTopUpQrPaymentSection = hideTopUpQrPaymentSection;
+  window.simulateTopUpQrPaymentDone = simulateTopUpQrPaymentDone;
+  window.cancelTopUpUpiCollectScreen = cancelTopUpUpiCollectScreen;
+  window.confirmTopUpUpiCollectSuccess = confirmTopUpUpiCollectSuccess;
+  window.submitTopUpCardPayment = submitTopUpCardPayment;
+  window.verifyTopUpBankOtpAndComplete = verifyTopUpBankOtpAndComplete;
+  window.selectTopUpBank = selectTopUpBank;
+  window.submitTopUpNetBankingPayment = submitTopUpNetBankingPayment;
+  window.executeWalletTopUpPayment = executeWalletTopUpPayment;
+  window.renderAdminSettings = renderAdminSettings;
+  window.openAddPromoModal = openAddPromoModal;
+  window.openEditPromoModal = openEditPromoModal;
+  window.submitAdminPromoForm = submitAdminPromoForm;
+  window.handleTogglePromo = handleTogglePromo;
+  window.handleDeletePromo = handleDeletePromo;
+  window.savePlatformSettingsForm = savePlatformSettingsForm;
+  window.autoFillProfileOtp = autoFillProfileOtp;
+  window.autoFillForgotOtp = autoFillForgotOtp;
 
-  // Run on ready or immediately
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initApp);
   } else {

@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════
-   FoodFlow Unified Design System & Stylesheet
-   Covers Customer Portal, Admin Panel, Backlog Docs & Test Suite
+   FoodFlow Unified Design System & Stylesheet — Production Release
+   Covers Customer Portal, Admin Panel & Automated Test Suite
    Theme: #E85D2F (Brand Orange), #1A1A2E (Dark Secondary), #F8F6F2 (Bg)
    ═══════════════════════════════════════════════════════════════ */
 
@@ -119,27 +119,6 @@ html, body {
   display: flex;
   align-items: center;
   gap: 12px;
-}
-.demo-role-select {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #fff;
-  padding: 3px 8px;
-  border-radius: 6px;
-  font-size: 0.78rem;
-  outline: none;
-  cursor: pointer;
-}
-.demo-role-select option {
-  background: #1A1A2E;
-  color: #fff;
-}
-.live-sync-pill {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.75);
 }
 
 /* ═══════════════════════ CUSTOMER NAVBAR ═══════════════════════ */
@@ -306,29 +285,6 @@ nav.customer-nav {
 }
 .search-bar button:hover {
   background: var(--primary-dark);
-}
-.hero-tags {
-  display: flex;
-  gap: 0.6rem;
-  justify-content: center;
-  margin-top: 1.25rem;
-  flex-wrap: wrap;
-  position: relative;
-}
-.hero-tag {
-  background: rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.88);
-  padding: 6px 16px;
-  border-radius: 20px;
-  font-size: 0.85rem;
-  cursor: pointer;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  transition: all 0.2s;
-}
-.hero-tag:hover {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: #fff;
 }
 
 /* ═══════════════════════ PROMO & CATEGORIES ═══════════════════════ */
@@ -1848,54 +1804,6 @@ input:checked + .toggle-slider:before {
   margin-top: 2px;
 }
 
-/* Simulated OTP Banner */
-.otp-sim-banner {
-  background: #EFF6FF;
-  border: 1.5px dashed #3B82F6;
-  border-radius: 10px;
-  padding: 12px 14px;
-  margin-bottom: 1.25rem;
-  font-size: 0.85rem;
-  color: #1E40AF;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.otp-code-highlight {
-  font-family: var(--code-font);
-  font-size: 1.25rem;
-  font-weight: 800;
-  letter-spacing: 3px;
-  color: #1D4ED8;
-  background: #DBEAFE;
-  padding: 3px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  user-select: all;
-}
-.otp-timer {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  text-align: center;
-  margin-top: 10px;
-}
-.resend-otp-btn {
-  background: none;
-  border: none;
-  color: var(--primary);
-  font-weight: 700;
-  cursor: pointer;
-  text-decoration: underline;
-  font-size: 0.8rem;
-  font-family: var(--font);
-}
-.resend-otp-btn:disabled {
-  color: var(--text-light);
-  cursor: not-allowed;
-  text-decoration: none;
-}
-
 /* ═══════════════════════ HEALTH & LOGS ═══════════════════════ */
 .health-grid {
   display: grid;
@@ -2344,7 +2252,7 @@ footer.global-footer strong {
   color: #991B1B;
 }
 
-/* ═══════════════════════ SWIGGY / ZOMATO STYLE OTP & AUTH WIZARD ═══════════════════════ */
+/* ═══════════════════════ OTP WIZARD ═══════════════════════ */
 .otp-boxes-wrapper {
   display: flex;
   gap: 10px;
@@ -2376,76 +2284,6 @@ footer.global-footer strong {
   border-color: var(--primary);
   background: #FFF5F2;
   color: var(--primary);
-}
-
-/* SMS / Push Notification Simulated Dropdown Card */
-.sms-push-banner {
-  background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
-  color: #fff;
-  border-radius: 14px;
-  padding: 12px 14px;
-  margin-bottom: 1.25rem;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-}
-@keyframes slideDown {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.sms-app-icon {
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
-  background: var(--primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.1rem;
-  flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(232, 93, 47, 0.4);
-}
-.sms-content {
-  flex: 1;
-}
-.sms-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.72rem;
-  color: rgba(255, 255, 255, 0.6);
-  margin-bottom: 3px;
-  text-transform: uppercase;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-}
-.sms-body {
-  font-size: 0.84rem;
-  line-height: 1.35;
-  color: #F1F5F9;
-}
-.sms-autofill-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  background: var(--primary);
-  color: #fff;
-  border: none;
-  padding: 4px 10px;
-  border-radius: 14px;
-  font-size: 0.76rem;
-  font-weight: 700;
-  cursor: pointer;
-  margin-top: 6px;
-  transition: all 0.15s;
-  box-shadow: 0 2px 6px rgba(232, 93, 47, 0.35);
-}
-.sms-autofill-btn:hover {
-  background: var(--primary-hover);
-  transform: scale(1.03);
 }
 
 /* Destination Badge */
@@ -2512,29 +2350,6 @@ footer.global-footer strong {
   color: #fff;
 }
 
-/* Quick Demo Chips for Instant Testing */
-.demo-quick-chips {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin-top: 10px;
-}
-.demo-chip {
-  background: var(--surface2);
-  border: 1px dashed var(--border);
-  padding: 4px 10px;
-  border-radius: 14px;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.demo-chip:hover {
-  border-color: var(--primary);
-  color: var(--primary);
-  background: var(--primary-light);
-}
-
 @media (max-width: 480px) {
   .otp-digit-input {
     width: 38px;
@@ -2545,4 +2360,161 @@ footer.global-footer strong {
   .pw-checklist {
     grid-template-columns: 1fr;
   }
+}
+
+/* ═══════════════════════ ORDER SUB-TABS & ORDERS GRID ═══════════════════════ */
+.order-subtabs button.filter-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.order-subtabs button.filter-btn.active {
+  background: var(--surface);
+  color: var(--primary);
+  font-weight: 800;
+  box-shadow: var(--shadow-sm);
+}
+
+.orders-list-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* ═══════════════════════ SEARCH DISH MATCHES & LIVE SEARCH STYLES ═══════════════════════ */
+.search-results-bar {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.5rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.search-highlight-text {
+  color: var(--primary);
+  font-weight: 800;
+}
+.search-dishes-section {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 2px dashed var(--border);
+}
+.search-dish-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.25rem;
+  margin-top: 1rem;
+}
+.search-dish-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  display: flex;
+  gap: 12px;
+  box-shadow: var(--shadow);
+  transition: all 0.2s;
+}
+.search-dish-card:hover {
+  border-color: var(--primary);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+.search-dish-thumb {
+  width: 70px;
+  height: 70px;
+  border-radius: 10px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.dish-match-tag {
+  background: #FFF0EB;
+  color: var(--primary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 6px;
+  display: inline-block;
+  margin-top: 4px;
+}
+
+/* ═══════════════════════ SWIGGY / ZOMATO UPI VERIFICATION & COLLECT FLOW ═══════════════════════ */
+.upi-verify-box {
+  background: #F8FAFC;
+  border: 1.5px solid #E2E8F0;
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+.upi-verified-badge {
+  background: #E8F8EE;
+  border: 1.5px solid #22C55E;
+  color: #15803D;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-top: 10px;
+  font-size: 0.86rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: fadeIn 0.25s ease;
+}
+.upi-collect-screen {
+  background: #fff;
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 1.75rem 1.5rem;
+  text-align: center;
+}
+.upi-collect-phone-icon {
+  font-size: 3rem;
+  margin-bottom: 0.75rem;
+  animation: bounce 1.5s infinite ease-in-out;
+}
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+.upi-countdown-timer {
+  font-family: var(--code-font);
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--primary);
+  margin: 0.5rem 0 1rem;
+}
+
+/* ═══════════════════════ FOODFLOW WALLET & MULTI-WALLET STYLES ═══════════════════════ */
+.wallet-topup-chip {
+  background: var(--surface2);
+  border: 1.5px solid var(--border);
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.wallet-topup-chip:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: #FFF0EB;
+  transform: translateY(-1px);
+}
+.foodflow-wallet-opt {
+  position: relative;
+  transition: all 0.2s ease;
+}
+.foodflow-wallet-opt:hover {
+  box-shadow: 0 4px 12px rgba(232, 93, 47, 0.15);
+  transform: translateY(-1px);
 }

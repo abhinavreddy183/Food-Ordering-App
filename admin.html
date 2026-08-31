@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FoodFlow – Admin Management Panel</title>
+  <title>FoodFlow – Enterprise Admin Management Panel</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,10 +14,13 @@
   <header class="global-switcher-bar">
     <div class="switcher-left">
       <span class="brand-badge">FoodFlow Admin Panel</span>
-      <a href="index.html" class="switcher-tab">🛍️ View Customer Website</a>
+      <a href="customer.html" class="switcher-tab">🛍️ Customer Portal</a>
+      <a href="test-suite.html" class="switcher-tab">🧪 Test Suite (31 Tests)</a>
     </div>
     <div class="switcher-right">
-      <div class="live-sync-pill" id="topDbStatusBadge" onclick="handleRetestMysqlConnection()" style="cursor:pointer;" title="Click to test MySQL connection"><span class="live-dot" id="topDbStatusDot"></span> <span id="topDbStatusText">MySQL: Checking...</span></div>
+      <div class="db-status-badge" id="topDbStatusBadge" onclick="handleRetestMysqlConnection()" style="cursor:pointer;" title="Click to test MySQL connection">
+        <span class="live-dot" id="topDbStatusDot"></span> <span id="topDbStatusText">MySQL Database</span>
+      </div>
     </div>
   </header>
 
@@ -55,13 +58,9 @@
         <span class="nav-icon">💳</span> <span>Payments</span>
       </button>
 
-      <div class="admin-section-label">System & DevOps</div>
-      <button class="admin-nav-item" onclick="showAdminPage('health', this)">
-        <span class="nav-icon">🖥️</span> <span>App Health</span>
-        <span class="live-dot" style="margin-left:auto;"></span>
-      </button>
+      <div class="admin-section-label">Platform</div>
       <button class="admin-nav-item" onclick="showAdminPage('settings', this)">
-        <span class="nav-icon">⚙️</span> <span>Settings</span>
+        <span class="nav-icon">⚙️</span> <span>Settings & Promos</span>
       </button>
 
       <div class="admin-sidebar-footer">
@@ -80,19 +79,7 @@
       <header class="admin-topbar">
         <div class="admin-topbar-left">
           <span class="admin-topbar-title" id="adminTopbarTitle">Dashboard Overview</span>
-          <span class="admin-topbar-sub" id="adminTopbarSub">Real-time sales, order volume and activity</span>
-        </div>
-        <div class="admin-topbar-right">
-          <button class="db-status-badge offline" id="topDbStatusBadge" onclick="openMysqlHelperModal()" title="Click to view MySQL Workbench Setup Guide" style="margin-right:4px;">
-            <span class="live-dot" id="topDbStatusDot" style="background:#EAB308;"></span> <span id="topDbStatusText">MySQL Database: Checking...</span>
-          </button>
-          <button class="topbar-btn" onclick="handleAdminExportCSV()">📥 Export CSV</button>
-          <button class="topbar-btn" onclick="showAdminPage('health', document.querySelectorAll('.admin-nav-item')[6])">
-            <span class="live-dot"></span> System Live
-          </button>
-          <button class="topbar-btn" onclick="window.FoodFlowStore.resetDemoData(); showToast('Demo data reloaded to initial state', 'info')">
-            🔄 Reset Demo
-          </button>
+          <span class="admin-topbar-sub" id="adminTopbarSub">Real-time sales, order volume and analytics</span>
         </div>
       </header>
 
@@ -101,93 +88,54 @@
         <div class="stats-grid">
           <div class="stat-card">
             <div>
-              <div class="stat-label">Total Orders Today</div>
-              <div class="stat-value" id="admStatOrders">142</div>
-              <div class="stat-change stat-up">↑ 18% vs yesterday</div>
+              <div class="stat-label">Total Orders</div>
+              <div class="stat-value" id="admStatOrders">0</div>
+              <div class="stat-change stat-up">Live tracking active</div>
             </div>
             <div class="stat-icon" style="background:#FFF0EB;">📋</div>
           </div>
           <div class="stat-card">
             <div>
-              <div class="stat-label">Revenue Today</div>
-              <div class="stat-value" id="admStatRevenue">₹28,450</div>
-              <div class="stat-change stat-up">↑ 14% vs yesterday</div>
+              <div class="stat-label">Gross Revenue</div>
+              <div class="stat-value" id="admStatRevenue">₹0</div>
+              <div class="stat-change stat-up">MySQL synchronized</div>
             </div>
             <div class="stat-icon" style="background:#E8F8EE;">💰</div>
           </div>
           <div class="stat-card">
             <div>
               <div class="stat-label">Active Users</div>
-              <div class="stat-value" id="admStatUsers">1,284</div>
-              <div class="stat-change stat-up">↑ 6% this week</div>
+              <div class="stat-value" id="admStatUsers">0</div>
+              <div class="stat-change stat-up">Verified accounts</div>
             </div>
             <div class="stat-icon" style="background:#EFF6FF;">👥</div>
           </div>
           <div class="stat-card">
             <div>
               <div class="stat-label">Pending Orders</div>
-              <div class="stat-value" id="admStatPending" style="color:var(--primary);">4</div>
-              <div class="stat-change stat-down">Needs kitchen attention</div>
+              <div class="stat-value" id="admStatPending" style="color:var(--primary);">0</div>
+              <div class="stat-change">Requires kitchen action</div>
             </div>
             <div class="stat-icon" style="background:#FEF2F2;">⏳</div>
           </div>
         </div>
 
-        <div class="three-col">
-          <div class="card">
-            <div class="card-header">
-              <span class="card-title">Orders Volume (This Week)</span>
-              <span style="font-size:0.8rem; color:var(--text-muted);">Sun – Sat</span>
-            </div>
-            <div class="card-body">
-              <div style="height:180px; display:flex; align-items:flex-end; gap:8px;" id="admWeeklyChart"></div>
-            </div>
+        <div class="card" style="margin-top:1.5rem;">
+          <div class="card-header">
+            <span class="card-title">Recent Customer Orders</span>
+            <button class="filter-btn outline" style="font-size:0.8rem;" onclick="showAdminPage('orders', document.querySelectorAll('.admin-nav-item')[1])">View All Orders</button>
           </div>
-          <div class="card">
-            <div class="card-header">
-              <span class="card-title">Revenue by Cuisine</span>
-            </div>
-            <div class="card-body" id="admCatBreakdown"></div>
-          </div>
-        </div>
-
-        <div class="two-col">
-          <div class="card">
-            <div class="card-header">
-              <span class="card-title">Recent Live Orders</span>
-              <button class="filter-btn outline" style="font-size:0.8rem;" onclick="showAdminPage('orders', document.querySelectorAll('.admin-nav-item')[1])">View All</button>
-            </div>
-            <div class="card-body" style="padding:0;">
-              <table class="data-table" id="admRecentOrdersTable"></table>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-header">
-              <span class="card-title">Top Performing Restaurants</span>
-            </div>
-            <div class="card-body" id="admTopRestaurants"></div>
+          <div class="card-body" style="padding:0;">
+            <table class="data-table" id="admRecentOrdersTable"></table>
           </div>
         </div>
       </div>
 
       <!-- ORDERS -->
       <div class="admin-page" id="admin-page-orders">
-        <div class="filter-bar">
-          <input class="filter-input" type="text" placeholder="Search orders by ID, customer name or restaurant..." oninput="filterAdminOrdersQuery(this.value)">
-          <select class="filter-select" onchange="filterAdminOrdersStatus(this.value)">
-            <option value="all">All Statuses</option>
-            <option value="pending">Pending</option>
-            <option value="preparing">Preparing</option>
-            <option value="on-the-way">On the Way</option>
-            <option value="delivered">Delivered</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
-          <button class="filter-btn" onclick="handleAdminExportCSV()">📥 Export CSV</button>
-        </div>
         <div class="card">
           <div class="card-header">
             <span class="card-title">All Customer Orders</span>
-            <span style="font-size:0.85rem; color:var(--text-muted);" id="admOrdersCountLabel">Showing orders</span>
           </div>
           <div class="data-table-container">
             <table class="data-table" id="admOrdersTable"></table>
@@ -197,21 +145,9 @@
 
       <!-- USERS -->
       <div class="admin-page" id="admin-page-users">
-        <div class="filter-bar">
-          <input class="filter-input" type="text" placeholder="Search users by name, email or role..." oninput="filterAdminUsersQuery(this.value)">
-          <select class="filter-select" onchange="filterAdminUsersRole(this.value)">
-            <option value="All Roles">All Roles</option>
-            <option value="Customer">Customer</option>
-            <option value="Restaurant Admin">Restaurant Admin</option>
-            <option value="Super Admin">Super Admin</option>
-            <option value="Delivery Agent">Delivery Agent</option>
-          </select>
-          <button class="filter-btn" onclick="openAddUserModal()">+ Add New User</button>
-        </div>
         <div class="card">
           <div class="card-header">
             <span class="card-title">User Accounts Directory</span>
-            <span style="font-size:0.85rem; color:var(--text-muted);">Manage roles & access</span>
           </div>
           <div class="data-table-container">
             <table class="data-table" id="admUsersTable"></table>
@@ -221,10 +157,6 @@
 
       <!-- RESTAURANTS -->
       <div class="admin-page" id="admin-page-restaurants">
-        <div class="filter-bar">
-          <input class="filter-input" type="text" placeholder="Search restaurants by name or cuisine..." oninput="filterAdminRestaurantsQuery(this.value)">
-          <button class="filter-btn" onclick="openAddRestaurantModal()">+ Add Restaurant</button>
-        </div>
         <div class="card">
           <div class="card-header">
             <span class="card-title">Registered Restaurant Partners</span>
@@ -237,44 +169,14 @@
 
       <!-- MENU -->
       <div class="admin-page" id="admin-page-menu">
-        <div class="filter-bar">
-          <select class="filter-select" id="admMenuRestSelect" onchange="renderAdminMenu()">
-            <option value="all">All Restaurants</option>
-            <option value="1">Spice Garden</option>
-            <option value="2">Pizza Republic</option>
-            <option value="3">Burger Barn</option>
-            <option value="4">Wok & Roll</option>
-            <option value="5">Dosa Delight</option>
-            <option value="6">Sweet Cravings</option>
-          </select>
-          <button class="filter-btn" onclick="openAddMenuModal()">+ Add Menu Item</button>
-        </div>
         <div id="admMenuItemsContainer"></div>
       </div>
 
       <!-- PAYMENTS -->
       <div class="admin-page" id="admin-page-payments">
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div><div class="stat-label">Total Revenue</div><div class="stat-value">₹4.2L</div><div class="stat-change stat-up">↑ 22% this month</div></div>
-            <div class="stat-icon" style="background:#E8F8EE;">💰</div>
-          </div>
-          <div class="stat-card">
-            <div><div class="stat-label">UPI Gateway Share</div><div class="stat-value">68%</div><div class="stat-change stat-up">Most popular method</div></div>
-            <div class="stat-icon" style="background:#EFF6FF;">📱</div>
-          </div>
-          <div class="stat-card">
-            <div><div class="stat-label">Avg Order Value</div><div class="stat-value">₹465</div><div class="stat-change stat-up">↑ ₹32 vs last week</div></div>
-            <div class="stat-icon" style="background:#FFF8E6;">📈</div>
-          </div>
-          <div class="stat-card">
-            <div><div class="stat-label">Payment Success Rate</div><div class="stat-value" style="color:var(--success);">98.7%</div><div class="stat-change stat-up">Razorpay/UPI stable</div></div>
-            <div class="stat-icon" style="background:#E8F8EE;">✓</div>
-          </div>
-        </div>
         <div class="card">
           <div class="card-header">
-            <span class="card-title">Payment Transaction Log</span>
+            <span class="card-title">Payment Transactions & Invoices</span>
           </div>
           <div class="data-table-container">
             <table class="data-table" id="admPaymentsTable"></table>
@@ -282,111 +184,53 @@
         </div>
       </div>
 
-      <!-- HEALTH & LOGS -->
-      <div class="admin-page" id="admin-page-health">
-        <div class="health-grid">
-          <div class="health-card">
-            <div class="health-label">API Gateway Server</div>
-            <div class="health-val" style="color:var(--success);">● Online</div>
-            <div class="health-status"><span style="color:var(--text-muted);">Latency:</span> <strong>38ms</strong></div>
-            <div style="margin-top:0.75rem;">
-              <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:4px;">CPU Usage — 24%</div>
-              <div class="progress-bar"><div class="progress-fill" style="width:24%; background:var(--success);"></div></div>
-            </div>
-          </div>
-          <div class="health-card">
-            <div class="health-label">Database (MySQL / Pool)</div>
-            <div class="health-val" style="color:var(--success);">● Connected</div>
-            <div class="health-status"><span style="color:var(--text-muted);">Active Pool:</span> <strong>14 / 100 conns</strong></div>
-            <div style="margin-top:0.75rem;">
-              <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:4px;">Memory Usage — 58%</div>
-              <div class="progress-bar"><div class="progress-fill" style="width:58%; background:var(--warning);"></div></div>
-            </div>
-          </div>
-          <div class="health-card">
-            <div class="health-label">Docker Container</div>
-            <div class="health-val" style="color:var(--success);">● Healthy</div>
-            <div class="health-status"><span style="color:var(--text-muted);">Uptime:</span> <strong>14d 6h (foodflow-web)</strong></div>
-            <div style="margin-top:0.75rem;">
-              <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:4px;">Disk Allocation — 36%</div>
-              <div class="progress-bar"><div class="progress-fill" style="width:36%; background:var(--success);"></div></div>
-            </div>
-          </div>
-          <div class="health-card">
-            <div class="health-label">Jenkins CI Pipeline</div>
-            <div class="health-val" style="color:var(--success);">● Passing</div>
-            <div class="health-status"><span style="color:var(--text-muted);">Build #142:</span> <strong>PASSED in 2m 14s</strong></div>
-            <div style="margin-top:0.75rem;">
-              <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:4px;">Build Success Rate — 96%</div>
-              <div class="progress-bar"><div class="progress-fill" style="width:96%; background:var(--success);"></div></div>
-            </div>
-          </div>
-          <div class="health-card">
-            <div class="health-label">Payment Gateway</div>
-            <div class="health-val" style="color:var(--success);">● Operational</div>
-            <div class="health-status"><span style="color:var(--text-muted);">UPI/Card Webhooks:</span> <strong>100% active</strong></div>
-            <div style="margin-top:0.75rem;">
-              <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:4px;">Txn Stability — 98.7%</div>
-              <div class="progress-bar"><div class="progress-fill" style="width:98.7%; background:var(--success);"></div></div>
-            </div>
-          </div>
-          <div class="health-card">
-            <div class="health-label">GitHub Repo Sync</div>
-            <div class="health-val" style="color:var(--success);">● Synced</div>
-            <div class="health-status"><span style="color:var(--text-muted);">Branch:</span> <strong>main (commit 8f4e2a)</strong></div>
-            <div style="margin-top:0.75rem;">
-              <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:4px;">Code Coverage — 82%</div>
-              <div class="progress-bar"><div class="progress-fill" style="width:82%; background:var(--info);"></div></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">Live Application & Access Log Stream</span>
-            <div style="display:flex; gap:8px;">
-              <button class="action-btn" onclick="handleGenerateTestLog()">+ Test Log</button>
-              <button class="action-btn danger" onclick="window.FoodFlowStore.clearLogs(); renderAdminHealth(); showToast('Logs cleared')">Clear</button>
-              <span class="badge badge-success"><span class="live-dot"></span> Live Stream</span>
-            </div>
-          </div>
-          <div class="card-body" style="padding:1rem;">
-            <div class="terminal-window" id="adminLiveLogOutput"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- SETTINGS -->
+      <!-- SETTINGS & PROMO COUPONS -->
       <div class="admin-page" id="admin-page-settings">
         <div class="two-col">
+          <!-- Platform Configuration -->
           <div class="card">
-            <div class="card-header"><span class="card-title">Platform Configuration</span></div>
+            <div class="card-header"><span class="card-title">⚙️ Platform Configuration</span></div>
             <div class="card-body">
-              <div class="form-group"><label>Platform Name</label><input type="text" value="FoodFlow"></div>
-              <div class="form-group"><label>Support Email</label><input type="email" value="support@foodflow.com"></div>
-              <div class="form-group"><label>Default Delivery Fee (₹)</label><input type="number" value="40"></div>
-              <div class="form-group"><label>Platform Commission Fee (₹)</label><input type="number" value="5"></div>
-              <button class="btn-primary" style="margin-top:1rem;" onclick="showToast('Platform settings saved successfully', 'success')">Save Settings</button>
+              <div class="form-group">
+                <label>Platform Name</label>
+                <input type="text" id="admSetPlatformName" value="FoodFlow">
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Default Delivery Fee (₹)</label>
+                  <input type="number" id="admSetDeliveryFee" value="40" min="0" max="500">
+                </div>
+                <div class="form-group">
+                  <label>Platform Commission Fee (₹)</label>
+                  <input type="number" id="admSetPlatformFee" value="5" min="0" max="100">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Support Helpline Number</label>
+                  <input type="text" id="admSetSupportPhone" value="+91 1800-200-8899">
+                </div>
+                <div class="form-group">
+                  <label>Support Email Address</label>
+                  <input type="email" id="admSetSupportEmail" value="support@foodflow.com">
+                </div>
+              </div>
+              <button class="btn-primary" style="margin-top:0.5rem;" onclick="savePlatformSettingsForm()">
+                💾 Save Global Configuration
+              </button>
             </div>
           </div>
 
-          <div>
-            <div class="card" style="margin-bottom:1.5rem;">
-              <div class="card-header">
-                <span class="card-title">Active Promo Codes</span>
-                <button class="filter-btn outline" style="font-size:0.8rem;" onclick="openAddPromoModal()">+ New Code</button>
-              </div>
-              <div class="card-body" style="padding:0.75rem 1.25rem;" id="admSettingsPromosList"></div>
+          <!-- 2. Promo Coupons & Discounts Management -->
+          <div class="card">
+            <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+              <span class="card-title">🎟️ Promo Codes & Coupons (<span id="admPromoCountBadge">0</span>)</span>
+              <button class="btn-primary" style="padding:6px 14px; font-size:0.85rem;" onclick="openAddPromoModal()">
+                + Add Coupon
+              </button>
             </div>
-
-            <div class="card">
-              <div class="card-header"><span class="card-title">Sprint & Build Deliverables</span></div>
-              <div class="card-body" style="font-size:0.85rem;">
-                <div style="display:flex; justify-content:space-between; margin-bottom:8px;"><span>Version:</span><strong>v1.0.0 (Release)</strong></div>
-                <div style="display:flex; justify-content:space-between; margin-bottom:8px;"><span>Containerization:</span><span class="badge badge-info">Docker Multi-Stage</span></div>
-                <div style="display:flex; justify-content:space-between; margin-bottom:8px;"><span>CI/CD Pipeline:</span><span class="badge badge-success">Jenkins ✓ Passed</span></div>
-                <div style="display:flex; justify-content:space-between;"><span>Testing:</span><span class="badge badge-success">End-to-End Suite Active</span></div>
-              </div>
+            <div class="card-body" style="padding:0.75rem 1.25rem;">
+              <div id="admSettingsPromosList"></div>
             </div>
           </div>
         </div>
@@ -394,259 +238,107 @@
     </main>
   </div>
 
+  <!-- PROMO COUPON MODAL (ADD / EDIT) -->
+  <div class="modal-backdrop" id="adminPromoModal">
+    <div class="modal-box" style="width:480px;">
+      <button class="modal-close-btn" onclick="closeAdminModal('adminPromoModal')">✕</button>
+      <h3 id="adminPromoModalTitle">🎟️ Add Promo Coupon</h3>
+      <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:1rem;">Configure coupon discounts, caps, and minimum order requirements.</p>
+      
+      <input type="hidden" id="adminPromoOldCode" value="">
+
+      <div class="form-group">
+        <label>Promo Code <span style="color:var(--danger);">*</span></label>
+        <input type="text" id="adminPromoCodeInput" placeholder="e.g. FOODFLOW50" style="text-transform:uppercase; font-weight:700; letter-spacing:1px;">
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Discount % <span style="color:var(--danger);">*</span></label>
+          <input type="number" id="adminPromoDiscountInput" placeholder="e.g. 50" min="1" max="100">
+        </div>
+        <div class="form-group">
+          <label>Max Discount Cap (₹) <span style="color:var(--danger);">*</span></label>
+          <input type="number" id="adminPromoMaxDiscountInput" placeholder="e.g. 150" min="1" max="5000">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Minimum Order Value (₹) <span style="color:var(--danger);">*</span></label>
+          <input type="number" id="adminPromoMinOrderInput" placeholder="e.g. 199" min="0" max="10000">
+        </div>
+        <div class="form-group" style="display:flex; align-items:center; margin-top:24px;">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:700;">
+            <input type="checkbox" id="adminPromoActiveCheckbox" checked style="width:18px; height:18px; cursor:pointer;">
+            <span>Coupon Active</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Description / Marketing Tagline</label>
+        <input type="text" id="adminPromoDescInput" placeholder="e.g. 50% OFF up to ₹150 on orders above ₹199">
+      </div>
+
+      <div class="field-error" id="err-adminPromo" style="margin-bottom:10px;"></div>
+
+      <div class="modal-actions">
+        <button class="btn-ghost" onclick="closeAdminModal('adminPromoModal')">Cancel</button>
+        <button class="btn-primary" onclick="submitAdminPromoForm()">Save Promo Coupon</button>
+      </div>
+    </div>
+  </div>
+
   <!-- STATUS MODAL -->
   <div class="modal-backdrop" id="adminOrderStatusModal">
-    <div class="modal-box" style="width:420px;">
+    <div class="modal-box" style="width:460px;">
       <button class="modal-close-btn" onclick="closeAdminModal('adminOrderStatusModal')">✕</button>
       <h3>Update Order Status</h3>
       <p style="color:var(--text-muted); font-size:0.88rem; margin-bottom:1rem;">Order: <strong id="admStatusModalOrderId">—</strong></p>
+      
       <div class="form-group">
         <label>Select New Status</label>
-        <select id="admStatusSelect">
+        <select id="admStatusSelect" onchange="handleAdminStatusSelectChange()">
           <option value="pending">⏳ Pending (Order Confirmed)</option>
           <option value="preparing">👨‍🍳 Preparing in Kitchen</option>
           <option value="on-the-way">🛵 On the Way (Out for Delivery)</option>
           <option value="delivered">✓ Delivered to Customer</option>
-          <option value="cancelled">✗ Cancelled (Requires Reason & Refund)</option>
+          <option value="cancelled">✗ Cancelled</option>
         </select>
       </div>
-      <div class="form-group">
-        <label>Kitchen / Dispatch Note (Optional)</label>
-        <textarea id="admStatusNote" placeholder="Order packed with extra mint chutney..." style="height:65px; resize:none;"></textarea>
+
+      <!-- Dedicated Admin Cancellation Reason Block -->
+      <div id="admCancelReasonGroup" style="display:none; background:var(--surface2); padding:1rem; border-radius:8px; border:1px solid var(--border); margin-bottom:1rem;">
+        <div style="font-weight:700; color:var(--danger); margin-bottom:8px; font-size:0.9rem; display:flex; align-items:center; gap:6px;">
+          <span>✕</span> Specify Cancellation Reason
+        </div>
+        <div class="form-group" style="margin-bottom:8px;">
+          <label style="font-size:0.82rem;">Primary Reason <span style="color:var(--danger);">*</span></label>
+          <select id="admCancelReasonSelect" style="font-size:0.88rem;">
+            <option value="Kitchen closed / Item out of stock">Kitchen closed / Item out of stock</option>
+            <option value="Restaurant unable to fulfill order">Restaurant unable to fulfill order</option>
+            <option value="Delivery partner unavailable in customer area">Delivery partner unavailable in customer area</option>
+            <option value="Customer address unserviceable / Phone unreachable">Customer address unserviceable / Phone unreachable</option>
+            <option value="Severe weather / Traffic interruption">Severe weather / Traffic interruption</option>
+            <option value="Operational delay / System cancellation">Operational delay / System cancellation</option>
+            <option value="Customer requested cancellation via call">Customer requested cancellation via call</option>
+            <option value="Other reason">Other reason</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:8px;">
+          <label style="font-size:0.82rem;">Admin Remarks / Notes (Optional)</label>
+          <textarea id="admCancelNotes" placeholder="Enter specific explanation for customer & logs..." style="height:55px; resize:none; font-size:0.85rem;"></textarea>
+        </div>
+        <div style="font-size:0.78rem; color:#166534; background:#E8F8EE; padding:8px 10px; border-radius:6px; border:1px solid #86EFAC; line-height:1.4;">
+          <strong>✓ Prepaid Orders:</strong> Automated 100% refund is credited back to customer's payment method.<br>
+          <strong>💵 Cash on Delivery Orders:</strong> Any collected cash will be returned directly by the delivery executive.
+        </div>
       </div>
+
       <div class="modal-actions">
         <button class="btn-ghost" onclick="closeAdminModal('adminOrderStatusModal')">Cancel</button>
         <button class="btn-primary" onclick="submitAdminOrderStatus()">Save & Sync Status</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ADMIN CANCEL ORDER & PROCESS REFUND MODAL -->
-  <div class="modal-backdrop" id="adminCancelOrderModal">
-    <div class="modal-box" style="width:480px;">
-      <button class="modal-close-btn" onclick="closeAdminModal('adminCancelOrderModal')">✕</button>
-      <h3 style="color:var(--danger); display:flex; align-items:center; gap:8px;">
-        <span>✕</span> Cancel Order & Issue Refund
-      </h3>
-      <p style="color:var(--text-muted); font-size:0.86rem; margin-bottom:1rem;">
-        Order: <strong id="admCancelOrderId">—</strong> · Customer: <strong id="admCancelCustomer">—</strong>
-      </p>
-
-      <div id="admCancelRefundBox"></div>
-
-      <div class="form-group" style="margin-top:1rem;">
-        <label>Mandatory Reason for Cancellation <span style="color:var(--danger);">*</span></label>
-        <select id="admCancelReasonSelect" onchange="handleAdminCancelReasonChange(this.value)">
-          <option value="Restaurant unable to accept order / Kitchen closed">Restaurant unable to accept order / Kitchen closed</option>
-          <option value="Item(s) requested are out of stock">Item(s) requested are out of stock</option>
-          <option value="No delivery partner available in customer area">No delivery partner available in customer area</option>
-          <option value="Customer requested cancellation via call/support">Customer requested cancellation via call/support</option>
-          <option value="Address unserviceable or delivery area restricted">Address unserviceable or delivery area restricted</option>
-          <option value="Suspected fraudulent order">Suspected fraudulent order</option>
-          <option value="Other">Other (Specify custom reason)</option>
-        </select>
-      </div>
-
-      <div class="form-group" id="admCancelCustomReasonGroup" style="display:none;">
-        <label>Specify Custom Reason <span style="color:var(--danger);">*</span></label>
-        <input type="text" id="admCancelCustomReasonInput" placeholder="Enter detailed cancellation reason...">
-      </div>
-
-      <div class="form-group">
-        <label>Internal Audit / Customer Note</label>
-        <textarea id="admCancelInternalNote" placeholder="e.g. Contacted customer, full refund initiated immediately..." style="height:60px; resize:none;"></textarea>
-      </div>
-
-      <div class="modal-actions">
-        <button class="btn-ghost" onclick="closeAdminModal('adminCancelOrderModal')">Keep Order</button>
-        <button class="action-btn danger" style="padding:11px 22px;" onclick="submitAdminCancelOrder()">Confirm Cancellation & Process Refund</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ADD USER MODAL -->
-  <div class="modal-backdrop" id="adminAddUserModal">
-    <div class="modal-box">
-      <button class="modal-close-btn" onclick="closeAdminModal('adminAddUserModal')">✕</button>
-      <h3>Add New User Account</h3>
-      <div class="form-row">
-        <div class="form-group" id="group-admAddUserFirst">
-          <label>First Name <span style="color:var(--danger);">*</span></label>
-          <input type="text" id="admAddUserFirst" placeholder="Vikram">
-          <div class="field-error" id="err-admAddUserFirst"></div>
-        </div>
-        <div class="form-group" id="group-admAddUserLast">
-          <label>Last Name</label>
-          <input type="text" id="admAddUserLast" placeholder="Singh">
-          <div class="field-error" id="err-admAddUserLast"></div>
-        </div>
-      </div>
-      <div class="form-group" id="group-admAddUserEmail">
-        <label>Email Address <span style="color:var(--danger);">*</span></label>
-        <input type="email" id="admAddUserEmail" placeholder="vikram@example.com">
-        <div class="field-error" id="err-admAddUserEmail"></div>
-      </div>
-      <div class="form-group" id="group-admAddUserPhone">
-        <label>Phone Number <span style="color:var(--danger);">*</span></label>
-        <input type="tel" id="admAddUserPhone" placeholder="9888877777">
-        <div class="field-error" id="err-admAddUserPhone"></div>
-      </div>
-      <div class="form-group" id="group-admAddUserPassword">
-        <label>Initial Password <span style="color:var(--danger);">*</span></label>
-        <div class="input-with-icon">
-          <input type="password" id="admAddUserPassword" placeholder="Default: Password@123" value="Password@123">
-          <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('admAddUserPassword', this)">👁️</button>
-        </div>
-        <div class="field-error" id="err-admAddUserPassword"></div>
-      </div>
-      <div class="form-group">
-        <label>Role Assignment</label>
-        <select id="admAddUserRole">
-          <option value="Customer">Customer</option>
-          <option value="Restaurant Admin">Restaurant Admin</option>
-          <option value="Delivery Agent">Delivery Agent</option>
-          <option value="Super Admin">Super Admin</option>
-        </select>
-      </div>
-      <div class="modal-actions">
-        <button class="btn-ghost" onclick="closeAdminModal('adminAddUserModal')">Cancel</button>
-        <button class="btn-primary" onclick="submitAdminAddUser()">Create Account</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ADD RESTAURANT MODAL -->
-  <div class="modal-backdrop" id="adminAddRestaurantModal">
-    <div class="modal-box">
-      <button class="modal-close-btn" onclick="closeAdminModal('adminAddRestaurantModal')">✕</button>
-      <h3>Add New Restaurant</h3>
-      <div class="form-row">
-        <div class="form-group"><label>Restaurant Name</label><input type="text" id="admAddRestName" placeholder="Tandoori Nights"></div>
-        <div class="form-group"><label>Photo URL (Unsplash / Web)</label><input type="text" id="admAddRestEmoji" placeholder="https://images.unsplash.com/..."></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label>Cuisine Type</label><input type="text" id="admAddRestCuisine" placeholder="North Indian"></div>
-        <div class="form-group"><label>Delivery Time (mins)</label><input type="text" id="admAddRestTime" placeholder="25–35"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label>Delivery Fee (₹)</label><input type="number" id="admAddRestFee" placeholder="30"></div>
-        <div class="form-group"><label>Location</label><input type="text" id="admAddRestLoc" placeholder="Banjara Hills, Hyderabad"></div>
-      </div>
-      <div class="form-group"><label>Description</label><textarea id="admAddRestDesc" placeholder="Authentic smoky kebabs and gravies..." style="height:55px; resize:none;"></textarea></div>
-      <div class="modal-actions">
-        <button class="btn-ghost" onclick="closeAdminModal('adminAddRestaurantModal')">Cancel</button>
-        <button class="btn-primary" onclick="submitAdminAddRestaurant()">Register Restaurant</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ADD MENU ITEM MODAL -->
-  <div class="modal-backdrop" id="adminAddMenuModal">
-    <div class="modal-box">
-      <button class="modal-close-btn" onclick="closeAdminModal('adminAddMenuModal')">✕</button>
-      <h3>Add Menu Item</h3>
-      <div class="form-row">
-        <div class="form-group"><label>Item Name</label><input type="text" id="admAddItemName" placeholder="Tandoori Paneer Roll"></div>
-        <div class="form-group"><label>Photo URL (Unsplash / Web)</label><input type="text" id="admAddItemEmoji" placeholder="https://images.unsplash.com/..."></div>
-      </div>
-      <div class="form-group"><label>Description</label><textarea id="admAddItemDesc" placeholder="Crispy flaky flatbread stuffed with marinated tandoori paneer..." style="height:55px; resize:none;"></textarea></div>
-      <div class="form-row">
-        <div class="form-group"><label>Price (₹)</label><input type="number" id="admAddItemPrice" placeholder="179"></div>
-        <div class="form-group"><label>Category</label><input type="text" id="admAddItemCategory" placeholder="Rolls & Wraps"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Restaurant Partner</label>
-          <select id="admAddItemRestSelect">
-            <option value="1">Spice Garden</option>
-            <option value="2">Pizza Republic</option>
-            <option value="3">Burger Barn</option>
-            <option value="4">Wok & Roll</option>
-            <option value="5">Dosa Delight</option>
-            <option value="6">Sweet Cravings</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Dietary Type</label>
-          <select id="admAddItemType">
-            <option value="veg">🌿 Vegetarian</option>
-            <option value="nonveg">🍗 Non-Vegetarian</option>
-          </select>
-        </div>
-      </div>
-      <div class="modal-actions">
-        <button class="btn-ghost" onclick="closeAdminModal('adminAddMenuModal')">Cancel</button>
-        <button class="btn-primary" onclick="submitAdminAddMenuItem()">Add to Menu</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ADD PROMO MODAL -->
-  <div class="modal-backdrop" id="adminAddPromoModal">
-    <div class="modal-box" style="width:440px;">
-      <button class="modal-close-btn" onclick="closeAdminModal('adminAddPromoModal')">✕</button>
-      <h3>Create New Promo Code</h3>
-      <div class="form-group"><label>Coupon Code</label><input type="text" id="admAddPromoCode" placeholder="KBSIRSTUDENT" style="text-transform:uppercase;"></div>
-      <div class="form-row">
-        <div class="form-group"><label>Discount Percentage (%)</label><input type="number" id="admAddPromoDiscount" placeholder="50"></div>
-        <div class="form-group"><label>Minimum Order (₹)</label><input type="number" id="admAddPromoMinOrder" placeholder="199"></div>
-      </div>
-      <div class="form-group"><label>Description</label><input type="text" id="admAddPromoDesc" placeholder="50% special discount on orders above ₹199"></div>
-      <div class="modal-actions">
-        <button class="btn-ghost" onclick="closeAdminModal('adminAddPromoModal')">Cancel</button>
-        <button class="btn-primary" onclick="submitAdminAddPromo()">Create Coupon</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- MYSQL WORKBENCH SETUP & STATUS MODAL -->
-  <div class="modal-backdrop" id="mysqlHelperModal">
-    <div class="modal-box" style="width:540px; max-height:90vh; overflow-y:auto;">
-      <button class="modal-close-btn" onclick="closeAdminModal('mysqlHelperModal')">✕</button>
-      <div style="display:flex; align-items:center; gap:10px; margin-bottom:1rem;">
-        <span style="font-size:2rem;">🐬</span>
-        <div>
-          <h3 style="margin-bottom:2px;">MySQL Workbench & Database Setup</h3>
-          <p style="color:var(--text-muted); font-size:0.82rem;">Database: <strong id="modalDbNameDisplay">foodflow_db</strong> · Port: <strong>3306</strong></p>
-        </div>
-      </div>
-
-      <div class="db-guide-box" style="border-left:4px solid var(--primary);">
-        <div style="font-weight:700; color:var(--text); margin-bottom:6px;">Current Connection Status:</div>
-        <div id="modalDbLiveStatus" style="font-size:0.95rem; font-weight:800; color:var(--warning); margin-bottom:4px;">
-          🟡 Checking MySQL Server...
-        </div>
-        <div id="modalDbLiveDetails" style="font-size:0.8rem; color:var(--text-muted);">
-          To store everything directly in MySQL, follow the 3 steps below.
-        </div>
-      </div>
-
-      <h4 style="font-size:0.92rem; margin-bottom:0.6rem;">⚡ How to connect MySQL Workbench:</h4>
-      
-      <div class="db-guide-box">
-        <strong>Step 1: Open schema.sql in MySQL Workbench</strong>
-        <p style="color:var(--text-muted); font-size:0.8rem; margin:4px 0 6px 0;">
-          Launch <strong>MySQL Workbench</strong>, connect to your Local Instance (port 3306), go to <strong>File → Open SQL Script</strong> and select:
-        </p>
-        <code class="db-code-snippet">schema.sql (in your FoodFlow_Fresh directory)</code>
-        <p style="color:var(--text-muted); font-size:0.8rem; margin-top:4px;">Click the ⚡ <strong>Execute</strong> lightning bolt button in MySQL Workbench to create all 16 tables and seed data!</p>
-      </div>
-
-      <div class="db-guide-box">
-        <strong>Step 2: Configure MySQL Password in .env</strong>
-        <p style="color:var(--text-muted); font-size:0.8rem; margin:4px 0 6px 0;">Open <code>.env</code> in your project directory and set your MySQL password:</p>
-        <code class="db-code-snippet">DB_PASSWORD=your_mysql_password</code>
-      </div>
-
-      <div class="db-guide-box">
-        <strong>Step 3: Start Node.js Express Backend API</strong>
-        <p style="color:var(--text-muted); font-size:0.8rem; margin:4px 0 6px 0;">Open terminal in the project directory and run:</p>
-        <code class="db-code-snippet">npm install && npm start</code>
-      </div>
-
-      <div class="modal-actions" style="margin-top:1.25rem;">
-        <button class="btn-ghost" onclick="closeAdminModal('mysqlHelperModal')">Close</button>
-        <button class="btn-primary" onclick="handleRetestMysqlConnection()">🔄 Test MySQL Connection</button>
       </div>
     </div>
   </div>
@@ -663,8 +355,10 @@
     </div>
   </div>
 
+  <!-- TOAST NOTIFICATION -->
   <div class="toast" id="globalToast"></div>
 
+  <!-- SCRIPTS -->
   <script src="store.js"></script>
   <script src="app.js"></script>
 </body>

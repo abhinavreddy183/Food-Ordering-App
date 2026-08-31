@@ -1,191 +1,121 @@
-// ═══════════════════════════════════════════════════════════════
-// FoodFlow — Enterprise Node.js Express & MySQL REST API Server
-// Production-Ready Backend Architecture (Version 2.0.0)
-// ═══════════════════════════════════════════════════════════════
+/**
+ * ═══════════════════════════════════════════════════════════════
+ * FoodFlow — Enterprise Express REST API Server
+ * Fully Synchronized with MySQL Relational Database
+ * ═══════════════════════════════════════════════════════════════
+ */
 
+require('dotenv').config();
 const express = require('express');
+const mysql = require('mysql2/promise');
 const cors = require('cors');
+const bodyParser = require('body-parser');
 const path = require('path');
 const fs = require('fs');
-const mysql = require('mysql2/promise');
-require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const DEFAULT_PORT = parseInt(process.env.PORT || '5000', 10);
 
-// Standard Middlewares
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-}));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// Request Logger Middleware
-app.use((req, res, next) => {
-  const start = Date.now();
-  res.on('finish', () => {
-    const duration = Date.now() - start;
-    if (req.path.startsWith('/api')) {
-      const statusColor = res.statusCode >= 400 ? '❌' : '✓';
-      console.log(`[API] ${statusColor} ${req.method} ${req.originalUrl} → ${res.statusCode} (${duration}ms)`);
-    }
-  });
-  next();
-});
-
-// Serve static frontend files directly from the current directory
-app.use(express.static(__dirname));
+// Middlewares
+app.use(cors());
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname)));
 
 // MySQL Database Connection Pool Configuration
 const dbConfig = {
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || '3306', 10),
   user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || 'rootpassword123',
+  password: process.env.DB_PASSWORD || 'root',
   database: process.env.DB_NAME || 'foodflow_db',
   waitForConnections: true,
-  connectionLimit: parseInt(process.env.DB_CONNECTION_LIMIT || '20', 10),
+  connectionLimit: 15,
   queueLimit: 0,
   enableKeepAlive: true,
-  keepAliveInitialDelay: 0,
-  multipleStatements: true
+  keepAliveInitialDelay: 0
 };
 
 let pool = null;
 let isDbConnected = false;
 let lastDbError = null;
 
-// Initialize Database Pool & Self-Healing Migration Check
 async function initDbPool() {
   try {
     pool = mysql.createPool(dbConfig);
     const conn = await pool.getConnection();
+    await conn.ping();
+    conn.release();
     isDbConnected = true;
     lastDbError = null;
-    console.log(`[MySQL] ✓ Connected successfully to MySQL Database "${dbConfig.database}" on ${dbConfig.host}:${dbConfig.port}`);
-    conn.release();
-
-    // Verify if database tables exist; if not, attempt auto-migration from schema.sql
-    await checkAndAutoMigrateSchema();
+    console.log(`[MySQL] ✓ Connected successfully to MySQL database "${dbConfig.database}" at ${dbConfig.host}:${dbConfig.port}`);
   } catch (err) {
     isDbConnected = false;
     lastDbError = err.message;
-    console.warn(`[MySQL] ⚠️ Could not connect to MySQL: ${err.message}`);
-    console.warn(`[MySQL] 👉 Please ensure MySQL Server is running on port ${dbConfig.port} and your password in .env is correct.`);
+    console.warn(`[MySQL] ⚠️ Connection warning: ${err.message}`);
+    console.warn(`[MySQL] 👉 Please ensure MySQL Server is running and "foodflow_db" is created via schema.sql.`);
   }
 }
 
-// Auto-migration helper if schema has not been executed yet
-async function checkAndAutoMigrateSchema() {
-  if (!pool) return;
-  try {
-    const [tables] = await pool.query('SHOW TABLES');
-    if (tables.length === 0) {
-      console.log('[MySQL] 📦 Database is empty. Auto-executing schema.sql to create 16 tables, views, and seed data...');
-      const schemaPath = path.join(__dirname, 'schema.sql');
-      if (fs.existsSync(schemaPath)) {
-        const schemaSql = fs.readFileSync(schemaPath, 'utf8');
-        await pool.query(schemaSql);
-        console.log('[MySQL] ✓ Auto-migration complete: 16 tables, views & seed data initialized successfully!');
-      }
-    }
-  } catch (err) {
-    console.warn('[MySQL] Auto-migration check note:', err.message);
-  }
-}
-
-initDbPool();
-
-// Helper middleware to verify DB connection
-async function checkDbConnection(req, res, next) {
-  if (!pool || !isDbConnected) {
+// Database Connection Check Middleware
+const checkDbConnection = (req, res, next) => {
+  if (!isDbConnected || !pool) {
     return res.status(503).json({
       success: false,
-      error: 'Database is currently offline or pool not initialized.',
-      dbStatus: 'offline',
-      details: lastDbError,
-      help: 'Ensure MySQL Server is running on port 3306 and execute schema.sql in MySQL Workbench.'
+      error: 'MySQL Database is not connected.',
+      details: lastDbError || 'Please start MySQL Server and check your .env settings.'
     });
   }
   next();
-}
+};
 
 // ═══════════════════════════════════════════════════════════════
-// 1. HEALTH, SYSTEM DIAGNOSTICS & SETUP APIS
+// 1. HEALTH CHECK & DIAGNOSTICS APIS
 // ═══════════════════════════════════════════════════════════════
 
 app.get('/api/health', async (req, res) => {
-  try {
-    if (!pool) throw new Error('Database pool not created');
-    const start = Date.now();
-    await pool.query('SELECT 1 AS ok');
-    const latency = Date.now() - start;
-
-    // Fetch counts across tables
-    const [[usersCount]] = await pool.query('SELECT COUNT(*) AS count FROM users');
-    const [[restCount]] = await pool.query('SELECT COUNT(*) AS count FROM restaurants');
-    const [[menuCount]] = await pool.query('SELECT COUNT(*) AS count FROM menu_items');
-    const [[ordersCount]] = await pool.query('SELECT COUNT(*) AS count FROM orders');
-    const [[txnCount]] = await pool.query('SELECT COUNT(*) AS count FROM payment_transactions');
-    const [[refundCount]] = await pool.query('SELECT COUNT(*) AS count FROM refunds');
-
-    isDbConnected = true;
-    lastDbError = null;
-
-    res.json({
-      status: 'UP',
-      database: 'MySQL 8.0 (foodflow_db)',
-      connected: true,
-      latencyMs: latency,
-      stats: {
-        users: usersCount.count,
-        restaurants: restCount.count,
-        menuItems: menuCount.count,
-        orders: ordersCount.count,
-        transactions: txnCount.count,
-        refunds: refundCount.count
-      },
-      poolConfig: {
-        host: dbConfig.host,
-        port: dbConfig.port,
-        database: dbConfig.database,
-        connectionLimit: dbConfig.connectionLimit
-      },
-      timestamp: new Date().toISOString()
-    });
-  } catch (err) {
-    isDbConnected = false;
-    lastDbError = err.message;
-    res.status(200).json({
-      status: 'DEGRADED',
-      database: 'MySQL (Disconnected)',
-      connected: false,
-      error: err.message,
-      help: 'Launch MySQL Workbench → Open schema.sql → Click Execute (⚡) to create all 16 tables.',
-      timestamp: new Date().toISOString()
-    });
+  if (!pool) {
+    await initDbPool();
   }
-});
+  let dbStatus = 'disconnected';
+  let tableCount = 0;
+  let errorMsg = lastDbError;
 
-// Force Re-Run Schema Seed Data
-app.post('/api/admin/reset-demo', checkDbConnection, async (req, res) => {
-  try {
-    const schemaPath = path.join(__dirname, 'schema.sql');
-    if (!fs.existsSync(schemaPath)) {
-      return res.status(404).json({ success: false, error: 'schema.sql file not found on server' });
+  if (pool) {
+    try {
+      const conn = await pool.getConnection();
+      await conn.ping();
+      const [rows] = await conn.query('SHOW TABLES');
+      conn.release();
+      dbStatus = 'connected';
+      tableCount = rows.length;
+      isDbConnected = true;
+      errorMsg = null;
+    } catch (err) {
+      dbStatus = 'error';
+      isDbConnected = false;
+      errorMsg = err.message;
     }
-    const schemaSql = fs.readFileSync(schemaPath, 'utf8');
-    await pool.query(schemaSql);
-    res.json({ success: true, message: 'MySQL database reset to initial demo state with all 16 tables and seeds!' });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
   }
+
+  res.json({
+    success: true,
+    status: 'online',
+    serverPort: app.get('port') || DEFAULT_PORT,
+    database: {
+      status: dbStatus,
+      host: dbConfig.host,
+      port: dbConfig.port,
+      name: dbConfig.database,
+      tablesCount: tableCount,
+      error: errorMsg
+    },
+    timestamp: new Date().toISOString()
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════
-// 2. AUTHENTICATION & PASSWORD RECOVERY APIS
+// 2. AUTHENTICATION & PROFILE APIS
 // ═══════════════════════════════════════════════════════════════
 
 // Register User
@@ -198,12 +128,28 @@ app.post('/api/auth/register', checkDbConnection, async (req, res) => {
     }
 
     const cleanEmail = email.toLowerCase().trim();
-    const cleanPhone = phone.trim();
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(cleanEmail)) {
+      return res.status(400).json({ success: false, error: 'Please enter a valid email address.' });
+    }
 
-    // Duplicate Check
-    const [existing] = await pool.query('SELECT id FROM users WHERE email = ? OR phone = ?', [cleanEmail, cleanPhone]);
-    if (existing.length > 0) {
-      return res.status(409).json({ success: false, error: 'An account with this email or mobile number already exists.' });
+    const digitsOnly = phone.replace(/\D/g, '');
+    const cleanPhoneDigits = digitsOnly.slice(-10);
+    const phoneRegex = /^[6-9]\d{9}$/;
+    if (!phoneRegex.test(cleanPhoneDigits)) {
+      return res.status(400).json({ success: false, error: 'Please enter a valid 10-digit Indian mobile number.' });
+    }
+
+    // Duplicate Check for Email
+    const [existingEmail] = await pool.query('SELECT id FROM users WHERE email = ?', [cleanEmail]);
+    if (existingEmail.length > 0) {
+      return res.status(409).json({ success: false, error: 'An account with this email address already exists. Please log in.' });
+    }
+
+    // Duplicate Check for Phone Number
+    const [existingPhone] = await pool.query('SELECT id FROM users WHERE phone LIKE ?', [`%${cleanPhoneDigits}%`]);
+    if (existingPhone.length > 0) {
+      return res.status(409).json({ success: false, error: 'An account with this mobile number already exists. Please use a different number or log in.' });
     }
 
     // Generate Sequential ID
@@ -224,15 +170,14 @@ app.post('/api/auth/register', checkDbConnection, async (req, res) => {
       (lastName || '').trim(),
       cleanEmail,
       password || 'Password@123',
-      cleanPhone,
+      cleanPhoneDigits,
       role || 'Customer',
       initials
     ]);
 
     const [[newUser]] = await pool.query('SELECT id, name, first_name, last_name, email, phone, role, status, orders_count, total_spent, joined_date, initials FROM users WHERE id = ?', [newId]);
 
-    // Audit Log
-    await pool.query('INSERT INTO system_audit_logs (level, text) VALUES (?, ?)', ['INFO', `User registered: ${newUser.name} (${newUser.email}) [${newUser.role}]`]);
+    await pool.query('INSERT INTO system_audit_logs (level, text) VALUES (?, ?)', ['INFO', `User registered in MySQL: ${newUser.name} (${newUser.email})`]);
 
     res.status(201).json({ success: true, user: newUser, message: 'Account registered successfully in MySQL!' });
   } catch (err) {
@@ -262,7 +207,7 @@ app.post('/api/auth/login', checkDbConnection, async (req, res) => {
     const [rows] = await pool.query(query, params);
 
     if (rows.length === 0) {
-      return res.status(404).json({ success: false, error: 'No registered account found with these credentials.' });
+      return res.status(404).json({ success: false, error: 'No registered account found with these credentials. Please create an account first.' });
     }
 
     const user = rows[0];
@@ -303,10 +248,11 @@ app.get('/api/auth/me', checkDbConnection, async (req, res) => {
 // Update Profile
 app.put('/api/auth/profile', checkDbConnection, async (req, res) => {
   try {
-    const { email, id, name, phone, firstName, lastName, initials } = req.body;
-    if (!email && !id) return res.status(400).json({ success: false, error: 'Email or User ID is required.' });
+    const { email, oldEmail, id, name, phone, firstName, lastName, initials } = req.body;
+    if (!email && !id && !oldEmail) return res.status(400).json({ success: false, error: 'Email or User ID is required.' });
 
-    const cleanEmail = (email || '').toLowerCase().trim();
+    const lookupEmail = (oldEmail || email || '').toLowerCase().trim();
+    const newEmail = (email || lookupEmail).toLowerCase().trim();
     const fullName = (name || '').trim();
     const parts = fullName.split(' ');
     const fName = firstName || parts[0] || fullName;
@@ -318,6 +264,7 @@ app.put('/api/auth/profile', checkDbConnection, async (req, res) => {
       SET name = ?, 
           first_name = ?, 
           last_name = ?, 
+          email = ?,
           phone = IFNULL(?, phone), 
           initials = ? 
       WHERE email = ? OR id = ?
@@ -327,17 +274,23 @@ app.put('/api/auth/profile', checkDbConnection, async (req, res) => {
       fullName,
       fName,
       lName,
+      newEmail,
       phone ? phone.trim() : null,
       userInitials,
-      cleanEmail,
-      id || cleanEmail
+      lookupEmail,
+      id || lookupEmail
     ]);
 
-    const [[updated]] = await pool.query('SELECT id, name, first_name, last_name, email, phone, role, status, orders_count, total_spent, joined_date, initials FROM users WHERE email = ? OR id = ?', [cleanEmail, id || cleanEmail]);
+    if (newEmail !== lookupEmail) {
+      await pool.query('UPDATE user_addresses SET user_email = ? WHERE user_email = ?', [newEmail, lookupEmail]);
+      await pool.query('UPDATE orders SET email = ? WHERE email = ?', [newEmail, lookupEmail]);
+    }
+
+    const [[updated]] = await pool.query('SELECT id, name, first_name, last_name, email, phone, role, status, orders_count, total_spent, joined_date, initials FROM users WHERE email = ? OR id = ?', [newEmail, id || newEmail]);
 
     await pool.query('INSERT INTO system_audit_logs (level, text) VALUES (?, ?)', [
       'INFO',
-      `User profile updated in MySQL: "${fullName}" (${cleanEmail})`
+      `User profile updated in MySQL: "${fullName}" (${newEmail})`
     ]);
 
     res.json({ success: true, user: updated, message: 'Profile updated in MySQL!' });
@@ -399,35 +352,28 @@ app.post('/api/auth/forgot-password/request', checkDbConnection, async (req, res
 
     // Generate random 6-digit OTP
     const otp = String(Math.floor(100000 + Math.random() * 900000));
-    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-    // Mask destination for security
+    await pool.query(
+      'INSERT INTO password_resets (email, phone, otp_code, expires_at, used) VALUES (?, ?, ?, ?, FALSE)',
+      [user.email, user.phone, otp, expiresAt]
+    );
+
     const isPhoneSearch = cleanDigits.length >= 10 && !clean.includes('@');
     const maskedDest = isPhoneSearch
       ? `+91 ${user.phone.slice(-10, -4)}****${user.phone.slice(-2)}`
-      : `${user.email.slice(0, 3)}****@${user.email.split('@')[1]}`;
+      : `${user.email.slice(0, 2)}••••@${user.email.split('@')[1]}`;
 
-    // Invalidate prior OTPs
-    await pool.query('UPDATE password_resets SET used = TRUE WHERE email = ?', [user.email]);
-
-    // Insert new OTP record
-    await pool.query('INSERT INTO password_resets (email, identifier, otp_code, expires_at, used) VALUES (?, ?, ?, ?, FALSE)', [
-      user.email,
-      searchTarget,
-      otp,
-      expiresAt
-    ]);
-
-    await pool.query('INSERT INTO system_audit_logs (level, text) VALUES (?, ?)', ['INFO', `Password reset OTP generated for ${user.email}: ${otp}`]);
+    await pool.query('INSERT INTO system_audit_logs (level, text) VALUES (?, ?)', ['INFO', `Password reset OTP generated for: ${user.email}`]);
 
     res.json({
       success: true,
+      message: `A 6-digit OTP has been dispatched to ${maskedDest}.`,
+      destination: maskedDest,
       email: user.email,
       phone: user.phone,
-      maskedDest: maskedDest,
-      isPhone: isPhoneSearch,
-      otp: otp, // Returned for instant demo auto-fill push banner
-      message: `Verification code sent to ${maskedDest}`
+      otp: otp,
+      isPhone: isPhoneSearch
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -438,32 +384,23 @@ app.post('/api/auth/forgot-password/request', checkDbConnection, async (req, res
 app.post('/api/auth/forgot-password/verify', checkDbConnection, async (req, res) => {
   try {
     const { email, otp } = req.body;
-    if (!email || !otp) return res.status(400).json({ valid: false, error: 'Email and OTP are required.' });
+    if (!email || !otp) return res.status(400).json({ success: false, error: 'Email and OTP code are required.' });
 
     const cleanEmail = email.toLowerCase().trim();
     const cleanOtp = String(otp).trim();
 
-    const [records] = await pool.query(
-      'SELECT * FROM password_resets WHERE email = ? AND used = FALSE ORDER BY id DESC LIMIT 1',
-      [cleanEmail]
+    const [rows] = await pool.query(
+      'SELECT * FROM password_resets WHERE email = ? AND otp_code = ? AND used = FALSE AND expires_at > NOW() ORDER BY created_at DESC LIMIT 1',
+      [cleanEmail, cleanOtp]
     );
 
-    if (records.length === 0) {
-      return res.status(400).json({ valid: false, error: 'No active OTP found. Please request a new code.' });
+    if (rows.length === 0) {
+      return res.status(400).json({ success: false, error: 'Invalid or expired 6-digit OTP. Please request a new code.' });
     }
 
-    const record = records[0];
-    if (Date.now() > Number(record.expires_at)) {
-      return res.status(400).json({ valid: false, error: 'OTP has expired (10-minute limit). Please request a new code.' });
-    }
-
-    if (record.otp_code !== cleanOtp) {
-      return res.status(400).json({ valid: false, error: 'Incorrect 6-digit OTP code. Please check and re-enter.' });
-    }
-
-    res.json({ valid: true, message: 'OTP verified successfully!' });
+    res.json({ success: true, message: 'OTP verified successfully!' });
   } catch (err) {
-    res.status(500).json({ valid: false, error: err.message });
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -477,12 +414,11 @@ app.post('/api/auth/forgot-password/reset', checkDbConnection, async (req, res) 
     await pool.query('UPDATE users SET password = ? WHERE email = ?', [newPassword, cleanEmail]);
     await pool.query('UPDATE password_resets SET used = TRUE WHERE email = ?', [cleanEmail]);
 
-    // Return the updated user for instant automatic login
     const [[user]] = await pool.query('SELECT id, name, first_name, last_name, email, phone, role, status, orders_count, total_spent, joined_date, initials FROM users WHERE email = ?', [cleanEmail]);
 
     await pool.query('INSERT INTO system_audit_logs (level, text) VALUES (?, ?)', ['INFO', `Password securely reset in MySQL for: ${cleanEmail}`]);
 
-    res.json({ success: true, user: user, message: 'Password reset successfully in MySQL! Auto-logged in.' });
+    res.json({ success: true, user: user, message: 'Password reset successfully in MySQL!' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -523,27 +459,26 @@ app.get('/api/users', checkDbConnection, async (req, res) => {
 app.put('/api/users/:id/status', checkDbConnection, async (req, res) => {
   try {
     const userId = req.params.id;
-    const [users] = await pool.query('SELECT status, name, email FROM users WHERE id = ?', [userId]);
-    if (users.length === 0) return res.status(404).json({ success: false, error: 'User not found' });
+    const [[user]] = await pool.query('SELECT status, name, email FROM users WHERE id = ?', [userId]);
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
-    const newStatus = users[0].status === 'active' ? 'suspended' : 'active';
+    const newStatus = user.status === 'active' ? 'suspended' : 'active';
     await pool.query('UPDATE users SET status = ? WHERE id = ?', [newStatus, userId]);
+    await pool.query('INSERT INTO system_audit_logs (level, text) VALUES (?, ?)', ['WARN', `User ${user.name} (${user.email}) status set to ${newStatus}`]);
 
-    await pool.query('INSERT INTO system_audit_logs (level, text) VALUES (?, ?)', ['WARN', `Admin changed user #${userId} (${users[0].name}) status to ${newStatus.toUpperCase()}`]);
-
-    res.json({ success: true, userId, status: newStatus });
+    res.json({ success: true, id: userId, status: newStatus, message: `User status changed to ${newStatus}` });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
 // ═══════════════════════════════════════════════════════════════
-// 4. RESTAURANTS & CUISINES APIS
+// 4. RESTAURANTS APIS
 // ═══════════════════════════════════════════════════════════════
 
 app.get('/api/restaurants', checkDbConnection, async (req, res) => {
   try {
-    const { cuisine, search, sort } = req.query;
+    const { cuisine, search } = req.query;
     let query = 'SELECT * FROM restaurants WHERE 1=1';
     let params = [];
 
@@ -556,10 +491,7 @@ app.get('/api/restaurants', checkDbConnection, async (req, res) => {
       const s = `%${search.trim()}%`;
       params.push(s, s, s);
     }
-
-    if (sort === 'rating') query += ' ORDER BY rating DESC';
-    else if (sort === 'delivery_time') query += ' ORDER BY delivery_time ASC';
-    else query += ' ORDER BY rating DESC, orders_count DESC';
+    query += ' ORDER BY rating DESC, id ASC';
 
     const [rows] = await pool.query(query, params);
     res.json({ success: true, data: rows });
@@ -568,57 +500,28 @@ app.get('/api/restaurants', checkDbConnection, async (req, res) => {
   }
 });
 
-app.get('/api/restaurants/:id', checkDbConnection, async (req, res) => {
-  try {
-    const restId = req.params.id;
-    const [rows] = await pool.query('SELECT * FROM restaurants WHERE id = ?', [restId]);
-    if (rows.length === 0) return res.status(404).json({ success: false, error: 'Restaurant not found' });
-
-    const [menu] = await pool.query('SELECT * FROM menu_items WHERE restaurant_id = ? ORDER BY id ASC', [restId]);
-    const [reviews] = await pool.query('SELECT * FROM reviews_ratings WHERE restaurant_id = ? ORDER BY created_at DESC LIMIT 10', [restId]);
-
-    res.json({
-      success: true,
-      data: {
-        ...rows[0],
-        menu: menu.map((m) => ({
-          ...m,
-          is_veg: Boolean(m.is_veg),
-          is_bestseller: Boolean(m.is_bestseller),
-          available: Boolean(m.available),
-          price: Number(m.price)
-        })),
-        reviews
-      }
-    });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
 app.post('/api/restaurants', checkDbConnection, async (req, res) => {
   try {
-    const { name, image_url, emoji, cuisine, delivery_time, delivery_fee, location, description } = req.body;
+    const { name, cuisine, deliveryTime, feeValue, image, desc, location } = req.body;
     if (!name) return res.status(400).json({ success: false, error: 'Restaurant name is required.' });
 
     const insertSql = `
-      INSERT INTO restaurants (name, image_url, emoji, cuisine, rating, delivery_time, delivery_fee, location, description, orders_count, revenue, status)
-      VALUES (?, ?, ?, ?, 4.50, ?, ?, ?, ?, 0, 0.00, 'active')
+      INSERT INTO restaurants (name, cuisine, rating, delivery_time, delivery_fee, image_url, tag, description, location, status)
+      VALUES (?, ?, 4.50, ?, ?, ?, 'New', ?, ?, 'active')
     `;
 
     const [result] = await pool.query(insertSql, [
       name.trim(),
-      image_url || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=600&q=80',
-      emoji || '🏪',
       cuisine || 'Multi-Cuisine',
-      delivery_time || '25–35 mins',
-      delivery_fee || 30.00,
-      location || 'Hyderabad',
-      description || ''
+      deliveryTime || '25–35',
+      feeValue !== undefined ? Number(feeValue) : 30.00,
+      image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=600&q=80',
+      desc || 'Fresh gourmet dishes prepared to order.',
+      location || 'Hyderabad, Telangana'
     ]);
 
     const [[newRest]] = await pool.query('SELECT * FROM restaurants WHERE id = ?', [result.insertId]);
-    await pool.query('INSERT INTO system_audit_logs (level, text) VALUES (?, ?)', ['INFO', `New restaurant added: ${newRest.name} (ID: ${newRest.id})`]);
+    await pool.query('INSERT INTO system_audit_logs (level, text) VALUES (?, ?)', ['INFO', `Restaurant added to MySQL: "${newRest.name}"`]);
 
     res.status(201).json({ success: true, data: newRest });
   } catch (err) {
@@ -629,12 +532,11 @@ app.post('/api/restaurants', checkDbConnection, async (req, res) => {
 app.put('/api/restaurants/:id/status', checkDbConnection, async (req, res) => {
   try {
     const restId = req.params.id;
-    const [rows] = await pool.query('SELECT status, name FROM restaurants WHERE id = ?', [restId]);
-    if (rows.length === 0) return res.status(404).json({ success: false, error: 'Restaurant not found' });
+    const [[rest]] = await pool.query('SELECT status, name FROM restaurants WHERE id = ?', [restId]);
+    if (!rest) return res.status(404).json({ success: false, error: 'Restaurant not found' });
 
-    const newStatus = rows[0].status === 'active' ? 'inactive' : 'active';
+    const newStatus = rest.status === 'active' ? 'inactive' : 'active';
     await pool.query('UPDATE restaurants SET status = ? WHERE id = ?', [newStatus, restId]);
-
     res.json({ success: true, id: restId, status: newStatus });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -642,20 +544,25 @@ app.put('/api/restaurants/:id/status', checkDbConnection, async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// 5. MENU ITEMS MANAGEMENT APIS
+// 5. MENU ITEMS APIS
 // ═══════════════════════════════════════════════════════════════
 
 app.get('/api/menu', checkDbConnection, async (req, res) => {
   try {
-    const { restaurantId, category, is_veg, search } = req.query;
-    let query = 'SELECT m.*, r.name AS restaurant_name FROM menu_items m JOIN restaurants r ON m.restaurant_id = r.id WHERE 1=1';
+    const { restaurant_id, category, is_veg, search } = req.query;
+    let query = `
+      SELECT m.*, r.name AS restaurant_name 
+      FROM menu_items m 
+      JOIN restaurants r ON m.restaurant_id = r.id 
+      WHERE 1=1
+    `;
     let params = [];
 
-    if (restaurantId && restaurantId !== 'all') {
+    if (restaurant_id && restaurant_id !== 'all') {
       query += ' AND m.restaurant_id = ?';
-      params.push(restaurantId);
+      params.push(restaurant_id);
     }
-    if (category) {
+    if (category && category !== 'all') {
       query += ' AND m.category = ?';
       params.push(category);
     }
@@ -736,12 +643,16 @@ app.delete('/api/menu/:id', checkDbConnection, async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// 6. PROMO COUPONS & DISCOUNT ENGINE
+// 6. PROMO COUPONS APIS
 // ═══════════════════════════════════════════════════════════════
 
 app.get('/api/promos', checkDbConnection, async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM promo_coupons WHERE is_active = TRUE ORDER BY discount_percent DESC');
+    const includeInactive = req.query.all === 'true';
+    const sql = includeInactive 
+      ? 'SELECT * FROM promo_coupons ORDER BY created_at DESC, discount_percent DESC'
+      : 'SELECT * FROM promo_coupons WHERE is_active = TRUE ORDER BY discount_percent DESC';
+    const [rows] = await pool.query(sql);
     res.json({ success: true, data: rows });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -774,35 +685,37 @@ app.get('/api/promos/validate/:code', checkDbConnection, async (req, res) => {
       code: promo.code,
       discountPercent: promo.discount_percent,
       discountAmount: Math.round(discountAmount),
-      message: `🎉 Promo ${promo.code} applied! Saved ₹${Math.round(discountAmount)}.`
+      message: `Promo ${promo.code} applied! Saved ₹${Math.round(discountAmount)}.`
     });
   } catch (err) {
     res.status(500).json({ valid: false, error: err.message });
   }
 });
+
 app.post('/api/promos', checkDbConnection, async (req, res) => {
   try {
-    const { code, discount, discount_percent, maxDiscount, max_discount, minOrder, min_order_amount, description } = req.body;
+    const { code, discount, discount_percent, maxDiscount, max_discount, minOrder, min_order_amount, description, desc, active, is_active } = req.body;
     if (!code) return res.status(400).json({ success: false, error: 'Promo code is required.' });
 
     const cleanCode = code.trim().toUpperCase();
     const pct = discount_percent || discount || 20;
     const maxD = max_discount || maxDiscount || 150.00;
     const minO = min_order_amount || minOrder || 199.00;
+    const isActive = active !== undefined ? Boolean(active) : (is_active !== undefined ? Boolean(is_active) : true);
 
     await pool.query(`
       INSERT INTO promo_coupons (code, discount_percent, max_discount, min_order_amount, description, is_active)
-      VALUES (?, ?, ?, ?, ?, TRUE)
+      VALUES (?, ?, ?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE 
         discount_percent = VALUES(discount_percent),
         max_discount = VALUES(max_discount),
         min_order_amount = VALUES(min_order_amount),
         description = VALUES(description),
-        is_active = TRUE
-    `, [cleanCode, pct, maxD, minO, description || 'Special discount coupon']);
+        is_active = VALUES(is_active)
+    `, [cleanCode, pct, maxD, minO, description || desc || 'Special discount coupon', isActive]);
 
     const [[newPromo]] = await pool.query('SELECT * FROM promo_coupons WHERE code = ?', [cleanCode]);
-    await pool.query('INSERT INTO system_audit_logs (level, text) VALUES (?, ?)', ['INFO', `Promo coupon created/updated: ${cleanCode}`]);
+    await pool.query('INSERT INTO system_audit_logs (level, text) VALUES (?, ?)', ['INFO', `Promo coupon created/saved: ${cleanCode}`]);
 
     res.status(201).json({ success: true, data: newPromo });
   } catch (err) {
@@ -810,11 +723,57 @@ app.post('/api/promos', checkDbConnection, async (req, res) => {
   }
 });
 
+app.put('/api/promos/:code', checkDbConnection, async (req, res) => {
+  try {
+    const oldCode = req.params.code.toUpperCase().trim();
+    const { code, discount, discount_percent, maxDiscount, max_discount, minOrder, min_order_amount, description, desc, active, is_active } = req.body;
+
+    const newCode = (code || oldCode).trim().toUpperCase();
+    const pct = discount_percent !== undefined ? discount_percent : (discount !== undefined ? discount : 20);
+    const maxD = max_discount !== undefined ? max_discount : (maxDiscount !== undefined ? maxDiscount : 150.00);
+    const minO = min_order_amount !== undefined ? min_order_amount : (minOrder !== undefined ? minOrder : 199.00);
+    const descText = description || desc || 'Special discount coupon';
+    const isActive = active !== undefined ? Boolean(active) : (is_active !== undefined ? Boolean(is_active) : true);
+
+    await pool.query(`
+      UPDATE promo_coupons
+      SET code = ?,
+          discount_percent = ?,
+          max_discount = ?,
+          min_order_amount = ?,
+          description = ?,
+          is_active = ?
+      WHERE UPPER(code) = ?
+    `, [newCode, pct, maxD, minO, descText, isActive, oldCode]);
+
+    const [[updatedPromo]] = await pool.query('SELECT * FROM promo_coupons WHERE UPPER(code) = ?', [newCode]);
+    await pool.query('INSERT INTO system_audit_logs (level, text) VALUES (?, ?)', ['INFO', `Promo coupon updated: ${newCode}`]);
+
+    res.json({ success: true, data: updatedPromo, message: `Promo coupon ${newCode} updated in MySQL!` });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.put('/api/promos/:code/status', checkDbConnection, async (req, res) => {
+  try {
+    const code = req.params.code.toUpperCase().trim();
+    const { active, is_active } = req.body;
+    const targetStatus = active !== undefined ? Boolean(active) : Boolean(is_active);
+
+    await pool.query('UPDATE promo_coupons SET is_active = ? WHERE UPPER(code) = ?', [targetStatus, code]);
+    res.json({ success: true, code, is_active: targetStatus, message: `Promo ${code} is now ${targetStatus ? 'Active' : 'Disabled'}` });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.delete('/api/promos/:code', checkDbConnection, async (req, res) => {
   try {
-    const cleanCode = req.params.code.trim().toUpperCase();
-    await pool.query('UPDATE promo_coupons SET is_active = FALSE WHERE UPPER(code) = ?', [cleanCode]);
-    res.json({ success: true, message: `Promo ${cleanCode} deactivated` });
+    const code = req.params.code.toUpperCase().trim();
+    await pool.query('DELETE FROM promo_coupons WHERE UPPER(code) = ?', [code]);
+    await pool.query('INSERT INTO system_audit_logs (level, text) VALUES (?, ?)', ['INFO', `Promo coupon deleted: ${code}`]);
+    res.json({ success: true, code, message: `Promo coupon ${code} deleted from MySQL` });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -843,14 +802,27 @@ app.get('/api/orders', checkDbConnection, async (req, res) => {
       params.push(restaurantId);
     }
     if (search) {
-      query += ' AND (id LIKE ? OR customer_name LIKE ? OR restaurant_name LIKE ?)';
+      query += ' AND (id LIKE ? OR customer_name LIKE ? OR phone LIKE ?)';
       const s = `%${search.trim()}%`;
       params.push(s, s, s);
     }
     query += ' ORDER BY created_at DESC';
 
-    const [rows] = await pool.query(query, params);
-    res.json({ success: true, data: rows });
+    const [orders] = await pool.query(query, params);
+
+    for (let order of orders) {
+      const [items] = await pool.query('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
+      order.items = items;
+      order.itemsSummary = items.map((i) => `${i.item_name} ×${i.quantity}`).join(', ');
+      order.total = Number(order.total);
+      order.subtotal = Number(order.subtotal);
+      order.discount = Number(order.discount);
+      order.delivery_fee = Number(order.delivery_fee);
+      order.platform_fee = Number(order.platform_fee);
+      order.refund_amount = Number(order.refund_amount);
+    }
+
+    res.json({ success: true, data: orders });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -858,139 +830,148 @@ app.get('/api/orders', checkDbConnection, async (req, res) => {
 
 app.get('/api/orders/:id', checkDbConnection, async (req, res) => {
   try {
-    const rawId = req.params.id.replace(/^#/, '').trim();
-    const [orders] = await pool.query('SELECT * FROM orders WHERE id = ? OR id = ?', [rawId, '#' + rawId]);
+    const orderId = req.params.id;
+    const [orders] = await pool.query('SELECT * FROM orders WHERE id = ?', [orderId]);
     if (orders.length === 0) return res.status(404).json({ success: false, error: 'Order not found' });
 
     const order = orders[0];
-    const [items] = await pool.query('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
-    const [timeline] = await pool.query('SELECT * FROM order_tracking_history WHERE order_id = ? ORDER BY created_at ASC', [order.id]);
-    const [payments] = await pool.query('SELECT * FROM payment_transactions WHERE order_id = ?', [order.id]);
-    const [refunds] = await pool.query('SELECT * FROM refunds WHERE order_id = ?', [order.id]);
+    const [items] = await pool.query('SELECT * FROM order_items WHERE order_id = ?', [orderId]);
+    const [tracking] = await pool.query('SELECT * FROM order_tracking_history WHERE order_id = ? ORDER BY created_at ASC', [orderId]);
 
-    res.json({
-      success: true,
-      data: {
-        ...order,
-        items,
-        timeline,
-        paymentDetails: payments[0] || null,
-        refundDetails: refunds[0] || null
-      }
-    });
+    order.items = items;
+    order.tracking = tracking;
+
+    res.json({ success: true, data: order });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// Atomic Order Placement ACID Transaction
+// ACID Atomic Order Placement
 app.post('/api/orders', checkDbConnection, async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
 
-    const orderData = req.body;
-    const orderId = orderData.id || `FF${Math.floor(1000 + Math.random() * 9000).toString(36).toUpperCase()}${Math.floor(1000 + Math.random() * 9000).toString(36).toUpperCase()}`;
-    const txnId = `TXN-${Math.floor(100000 + Math.random() * 900000)}`;
+    const {
+      id,
+      customer,
+      email,
+      phone,
+      deliveryAddress,
+      restaurantId,
+      restaurant,
+      items,
+      subtotal,
+      discount,
+      deliveryFee,
+      total,
+      promoCode,
+      paymentMethod,
+      kitchenNote
+    } = req.body;
 
-    const itemsSummary = (orderData.items || []).map((i) => `${i.name} ×${i.qty}`).join(', ') || orderData.itemsSummary || 'Delicious Meal';
+    const orderId = id || ('FF' + Math.random().toString(36).substring(2, 8).toUpperCase());
+    const isCod = paymentMethod === 'Cash on Delivery';
+    const payStatus = isCod ? 'pending' : 'success';
 
-    const orderInsertSql = `
-      INSERT INTO orders (id, user_id, customer_name, email, phone, delivery_address, restaurant_id, restaurant_name, subtotal, discount, delivery_fee, platform_fee, tax, total, promo_code, payment_method, payment_status, status, kitchen_note, items_summary)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'success', 'pending', ?, ?)
+    // Insert Order Master Record
+    const insertOrderSql = `
+      INSERT INTO orders (id, customer_name, email, phone, delivery_address, restaurant_id, restaurant_name, subtotal, discount, delivery_fee, platform_fee, total, promo_code, payment_method, payment_status, status, refund_status, kitchen_notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 5.00, ?, ?, ?, ?, 'pending', 'none', ?)
     `;
 
-    await conn.query(orderInsertSql, [
+    await conn.query(insertOrderSql, [
       orderId,
-      orderData.userId || null,
-      orderData.customer || orderData.customerName || 'Customer',
-      (orderData.email || 'customer@example.com').toLowerCase().trim(),
-      orderData.phone || '+91 98765 43210',
-      orderData.deliveryAddress || orderData.address || 'Address',
-      orderData.restaurantId || 1,
-      orderData.restaurant || orderData.restaurantName || 'Spice Garden',
-      orderData.subtotal || orderData.total || 0,
-      orderData.discount || 0,
-      orderData.deliveryFee || 30.00,
-      orderData.platformFee || 5.00,
-      orderData.tax || 0,
-      orderData.total || 0,
-      orderData.promoCode || null,
-      orderData.paymentMethod || 'UPI (Google Pay)',
-      orderData.kitchenNote || null,
-      itemsSummary
+      customer || 'Customer',
+      email.toLowerCase().trim(),
+      phone || '9876543210',
+      deliveryAddress || 'Standard Delivery Address',
+      restaurantId || 1,
+      restaurant || 'Spice Garden',
+      subtotal || total,
+      discount || 0.00,
+      deliveryFee || 0.00,
+      total,
+      promoCode || null,
+      paymentMethod || 'UPI',
+      payStatus,
+      kitchenNote || null
     ]);
 
-    // Insert order items
-    if (orderData.items && orderData.items.length > 0) {
-      const itemSql = 'INSERT INTO order_items (order_id, menu_item_id, item_name, price, qty, item_total) VALUES ?';
-      const itemValues = orderData.items.map((i) => [
-        orderId,
-        i.id || i.menu_item_id || 101,
-        i.name,
-        i.price,
-        i.qty,
-        (i.price * i.qty)
-      ]);
-      await conn.query(itemSql, [itemValues]);
+    // Insert Order Items
+    if (Array.isArray(items) && items.length > 0) {
+      for (const item of items) {
+        await conn.query(`
+          INSERT INTO order_items (order_id, menu_item_id, item_name, quantity, unit_price, total_price, is_veg, image_url)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          orderId,
+          item.id || item.menu_item_id || null,
+          item.name || 'Delicious Dish',
+          item.qty || 1,
+          item.price || 0,
+          (item.price || 0) * (item.qty || 1),
+          Boolean(item.veg !== false),
+          item.image || null
+        ]);
+      }
     }
 
-    // Insert Initial Timeline Step
+    // Insert Initial Tracking Step
     await conn.query(`
       INSERT INTO order_tracking_history (order_id, status, status_title, status_description, actor)
-      VALUES (?, 'pending', 'Order Received', 'Your order has been confirmed and received by the kitchen', 'System')
+      VALUES (?, 'pending', 'Order Confirmed', 'The kitchen has received your order and is reviewing it.', 'Customer')
     `, [orderId]);
 
     // Insert Payment Transaction Record
     await conn.query(`
-      INSERT INTO payment_transactions (id, order_id, customer_name, customer_email, amount, method, status, gateway_ref)
-      VALUES (?, ?, ?, ?, ?, ?, 'success', ?)
+      INSERT INTO payment_transactions (id, order_id, customer_name, customer_email, amount, method, status, gateway_txn_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `, [
-      txnId,
+      `TXN-${Math.floor(100000 + Math.random() * 900000)}`,
       orderId,
-      orderData.customer || 'Customer',
-      (orderData.email || '').toLowerCase().trim(),
-      orderData.total || 0,
-      orderData.paymentMethod || 'UPI',
-      `GATEWAY-${Math.floor(10000000 + Math.random() * 90000000)}`
+      customer,
+      email.toLowerCase().trim(),
+      total,
+      paymentMethod || 'UPI',
+      payStatus,
+      `GW-${Math.random().toString(36).substring(2, 10).toUpperCase()}`
     ]);
 
-    // Record Coupon Usage if coupon was applied
-    if (orderData.promoCode) {
-      await conn.query(`
-        INSERT INTO coupon_usage_history (coupon_code, user_email, order_id, discount_applied)
-        VALUES (?, ?, ?, ?)
-      `, [orderData.promoCode, (orderData.email || '').toLowerCase().trim(), orderId, orderData.discount || 0]);
-
-      await conn.query('UPDATE promo_coupons SET total_uses = total_uses + 1 WHERE code = ?', [orderData.promoCode]);
+    // Update User Total Spent, Orders Count & FoodFlow Wallet Balance
+    let walletDeductSql = '';
+    const cleanPayment = String(paymentMethod || '').trim();
+    if (cleanPayment === 'FoodFlow Wallet' || cleanPayment === 'Wallet (FoodFlow Wallet)') {
+      walletDeductSql = ', wallet_balance = GREATEST(0, wallet_balance - ' + Number(total) + ')';
     }
 
-    // Update Customer Lifetime Stats
-    if (orderData.email) {
-      await conn.query('UPDATE users SET orders_count = orders_count + 1, total_spent = total_spent + ? WHERE email = ?', [
-        orderData.total || 0,
-        orderData.email.toLowerCase().trim()
-      ]);
-    }
+    await conn.query(`
+      UPDATE users 
+      SET orders_count = orders_count + 1, 
+          total_spent = total_spent + ?
+          ${walletDeductSql}
+      WHERE email = ?
+    `, [total, email.toLowerCase().trim()]);
 
-    // Update Restaurant Revenue
-    if (orderData.restaurantId) {
-      await conn.query('UPDATE restaurants SET orders_count = orders_count + 1, revenue = revenue + ? WHERE id = ?', [
-        orderData.total || 0,
-        orderData.restaurantId
-      ]);
-    }
+    // Update Restaurant Revenue & Orders Count
+    await conn.query(`
+      UPDATE restaurants 
+      SET orders_count = orders_count + 1, 
+          revenue = revenue + ?
+      WHERE id = ?
+    `, [total, restaurantId || 1]);
 
-    // Audit Log
+    // Record Audit Log
     await conn.query('INSERT INTO system_audit_logs (level, text) VALUES (?, ?)', [
       'INFO',
-      `Order placed #${orderId} by ${orderData.customer} (${orderData.paymentMethod} - ₹${orderData.total})`
+      `Order #${orderId} placed by ${customer} for ₹${total} at ${restaurant} (${paymentMethod})`
     ]);
 
     await conn.commit();
 
     const [[createdOrder]] = await pool.query('SELECT * FROM orders WHERE id = ?', [orderId]);
-    res.status(201).json({ success: true, order: createdOrder, message: 'Order created & payment confirmed in MySQL!' });
+    res.status(201).json({ success: true, order: createdOrder, message: 'Order created in MySQL!' });
   } catch (err) {
     await conn.rollback();
     res.status(500).json({ success: false, error: err.message });
@@ -1002,77 +983,89 @@ app.post('/api/orders', checkDbConnection, async (req, res) => {
 // Update Order Status
 app.put('/api/orders/:id/status', checkDbConnection, async (req, res) => {
   try {
-    const rawId = req.params.id.replace(/^#/, '').trim();
+    const orderId = req.params.id;
     const { status, note, actor } = req.body;
-    const cleanStatus = (status || 'pending').toLowerCase().trim();
 
-    const statusDescriptions = {
-      pending: { title: 'Order Confirmed', desc: 'Order received and confirmed by restaurant' },
-      preparing: { title: 'Preparing Food', desc: 'Chef is preparing your fresh meal with authentic spices' },
-      'on-the-way': { title: 'Out for Delivery', desc: 'Delivery valet is on the way to your doorstep' },
-      delivered: { title: 'Order Delivered', desc: 'Order delivered successfully. Enjoy your meal!' },
-      cancelled: { title: 'Order Cancelled', desc: note || 'Order has been cancelled' }
+    const validStatuses = ['pending', 'preparing', 'on-the-way', 'delivered', 'cancelled'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ success: false, error: 'Invalid status' });
+    }
+
+    const titleMap = {
+      pending: 'Order Confirmed',
+      preparing: 'Chef is preparing your meal',
+      'on-the-way': 'Valet is on the way',
+      delivered: 'Order Delivered Successfully!',
+      cancelled: 'Order Cancelled'
     };
 
-    const info = statusDescriptions[cleanStatus] || { title: cleanStatus, desc: note || 'Status update' };
+    const descMap = {
+      pending: 'Kitchen has accepted your order.',
+      preparing: 'Fresh ingredients are being cooked to perfection.',
+      'on-the-way': 'Your delivery partner has picked up your food package.',
+      delivered: 'Enjoy your hot meal. Thank you for choosing FoodFlow!',
+      cancelled: note || 'Order was cancelled.'
+    };
 
-    await pool.query(`
-      UPDATE orders 
-      SET status = ?, 
-          kitchen_note = IFNULL(?, kitchen_note),
-          payment_status = IF(? = 'delivered' AND payment_status = 'pending', 'success', payment_status)
-      WHERE id = ? OR id = ?
-    `, [cleanStatus, note || null, cleanStatus, rawId, '#' + rawId]);
+    let payUpdate = '';
+    if (status === 'delivered') {
+      payUpdate = ", payment_status = 'success'";
+    }
 
-    // Append to Timeline History
+    await pool.query(`UPDATE orders SET status = ? ${payUpdate} WHERE id = ?`, [status, orderId]);
+
     await pool.query(`
       INSERT INTO order_tracking_history (order_id, status, status_title, status_description, actor)
       VALUES (?, ?, ?, ?, ?)
-    `, [rawId, cleanStatus, info.title, info.desc, actor || 'Restaurant']);
+    `, [orderId, status, titleMap[status] || status, descMap[status] || '', actor || 'Restaurant']);
 
     await pool.query('INSERT INTO system_audit_logs (level, text) VALUES (?, ?)', [
       'INFO',
-      `Order #${rawId} status transitioned to "${cleanStatus.toUpperCase()}"`
+      `Order #${orderId} status changed to: ${status.toUpperCase()} (${actor || 'Admin'})`
     ]);
 
-    const [rows] = await pool.query('SELECT * FROM orders WHERE id = ? OR id = ?', [rawId, '#' + rawId]);
-    res.json({ success: true, order: rows[0] || null, message: `Status updated to ${cleanStatus} in MySQL` });
+    const [[updated]] = await pool.query('SELECT * FROM orders WHERE id = ?', [orderId]);
+    res.json({ success: true, order: updated, message: `Order #${orderId} status updated to ${status}` });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// Order Cancellation & Instant Prepaid Refund Engine
+// Cancel Order & 100% Refund Engine
 app.post('/api/orders/:id/cancel', checkDbConnection, async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
 
-    const rawId = req.params.id.replace(/^#/, '').trim();
-    const { reason, cancelledBy, refundStatus, refundAmount, refundRef } = req.body;
+    const orderId = req.params.id;
+    const { reason, cancelledBy } = req.body;
 
-    const [orders] = await conn.query('SELECT * FROM orders WHERE id = ? OR id = ?', [rawId, '#' + rawId]);
-    if (orders.length === 0) {
+    const [[order]] = await conn.query('SELECT * FROM orders WHERE id = ?', [orderId]);
+    if (!order) {
       await conn.rollback();
       return res.status(404).json({ success: false, error: 'Order not found' });
     }
 
-    const order = orders[0];
-    const isPrepaid = order.payment_method !== 'Cash on Delivery';
-    const computedRefundAmount = refundAmount || order.total;
-    const finalRefundRef = refundRef || `REF-${Math.floor(100000 + Math.random() * 900000)}`;
+    if (order.status === 'delivered') {
+      await conn.rollback();
+      return res.status(400).json({ success: false, error: 'Delivered orders cannot be cancelled.' });
+    }
 
-    const effectiveRefundStatus = isPrepaid ? (refundStatus || 'refunded') : 'none';
+    const isPrepaid = order.payment_method !== 'Cash on Delivery' && order.payment_status !== 'failed';
+    const computedRefundAmount = isPrepaid ? Number(order.total) : 0.00;
+    const finalRefundRef = isPrepaid ? ('REF-' + Math.random().toString(36).substring(2, 9).toUpperCase()) : null;
+    const effectiveRefundStatus = isPrepaid ? 'refunded' : 'not_applicable';
 
-    // Update order status & refund fields
+    // Update Master Order
     await conn.query(`
       UPDATE orders 
-      SET status = 'cancelled', 
-          cancel_reason = ?, 
+      SET status = 'cancelled',
+          cancel_reason = ?,
           cancelled_by = ?,
-          refund_status = ?, 
-          refund_amount = ?, 
-          refund_ref = ?, 
+          cancelled_at = NOW(),
+          refund_status = ?,
+          refund_amount = ?,
+          refund_ref = ?,
           refund_time = IF(? = 'refunded', NOW(), NULL),
           payment_status = IF(? = 'refunded', 'refunded', payment_status)
       WHERE id = ?
@@ -1080,26 +1073,25 @@ app.post('/api/orders/:id/cancel', checkDbConnection, async (req, res) => {
       reason || 'Customer requested cancellation',
       cancelledBy || 'Customer',
       effectiveRefundStatus,
-      isPrepaid ? computedRefundAmount : 0.00,
-      isPrepaid ? finalRefundRef : null,
+      computedRefundAmount,
+      finalRefundRef,
       effectiveRefundStatus,
       effectiveRefundStatus,
       order.id
     ]);
 
-    // Append to Timeline History
+    // Timeline History
     await conn.query(`
       INSERT INTO order_tracking_history (order_id, status, status_title, status_description, actor)
       VALUES (?, 'cancelled', 'Order Cancelled', ?, ?)
     `, [
       order.id,
-      `Cancelled by ${cancelledBy || 'Customer'}. Reason: "${reason}". ${isPrepaid ? `100% refund of ₹${computedRefundAmount} issued.` : 'Cash on Delivery order.'}`,
+      `Cancelled by ${cancelledBy || 'Customer'}. Reason: "${reason}". ${isPrepaid ? `100% refund of ₹${computedRefundAmount} issued.` : 'For Cash on Delivery (COD), any cash collected will be refunded directly via the delivery executive.'}`,
       cancelledBy || 'Customer'
     ]);
 
-    // If Prepaid, Record in Dedicated Refunds Table & Payment Transactions Ledger
     if (isPrepaid && effectiveRefundStatus === 'refunded') {
-      // Insert to refunds table
+      // Insert Refund Record
       await conn.query(`
         INSERT INTO refunds (id, order_id, customer_name, customer_email, amount, original_payment_method, refund_status, reason, processed_by, gateway_refund_id)
         VALUES (?, ?, ?, ?, ?, ?, 'processed', ?, ?, ?)
@@ -1115,7 +1107,7 @@ app.post('/api/orders/:id/cancel', checkDbConnection, async (req, res) => {
         `GW-${finalRefundRef}`
       ]);
 
-      // Insert reversal into payment_transactions ledger
+      // Insert Reversal in Payment Ledger
       await conn.query(`
         INSERT INTO payment_transactions (id, order_id, customer_name, customer_email, amount, method, status, refund_ref, notes)
         VALUES (?, ?, ?, ?, ?, ?, 'refunded', ?, ?)
@@ -1129,12 +1121,35 @@ app.post('/api/orders/:id/cancel', checkDbConnection, async (req, res) => {
         finalRefundRef,
         `Refund for cancelled order #${order.id}. Reason: ${reason}`
       ]);
+
+      // Decrement User Total Spent & Orders Count in MySQL (+ Refund to FoodFlow Wallet if used)
+      let walletRefundSql = '';
+      const cleanOrderPayment = String(order.payment_method || '').trim();
+      if (cleanOrderPayment === 'FoodFlow Wallet' || cleanOrderPayment === 'Wallet (FoodFlow Wallet)') {
+        walletRefundSql = ', wallet_balance = wallet_balance + ' + Number(computedRefundAmount);
+      }
+
+      await conn.query(`
+        UPDATE users 
+        SET total_spent = GREATEST(0, total_spent - ?),
+            orders_count = GREATEST(0, orders_count - 1)
+            ${walletRefundSql}
+        WHERE email = ?
+      `, [computedRefundAmount, order.email]);
+
+      // Decrement Restaurant Revenue & Orders Count in MySQL
+      await conn.query(`
+        UPDATE restaurants 
+        SET revenue = GREATEST(0, revenue - ?),
+            orders_count = GREATEST(0, orders_count - 1)
+        WHERE id = ?
+      `, [computedRefundAmount, order.restaurant_id]);
     }
 
     // Audit Log
     await conn.query('INSERT INTO system_audit_logs (level, text) VALUES (?, ?)', [
       'WARN',
-      `Order #${order.id} CANCELLED by ${cancelledBy || 'User'}. Reason: "${reason}". Refund Status: ${effectiveRefundStatus} (₹${isPrepaid ? computedRefundAmount : 0})`
+      `Order #${order.id} CANCELLED by ${cancelledBy || 'User'}. Reason: "${reason}". Refund: ${effectiveRefundStatus} (₹${isPrepaid ? computedRefundAmount : 0})`
     ]);
 
     await conn.commit();
@@ -1144,8 +1159,73 @@ app.post('/api/orders/:id/cancel', checkDbConnection, async (req, res) => {
       success: true,
       order: updatedOrder,
       refundRef: isPrepaid ? finalRefundRef : null,
-      message: `Order #${order.id} cancelled. ${isPrepaid ? `100% refund of ₹${computedRefundAmount} processed!` : 'No payment deduction to refund.'}`
+      message: `Order #${order.id} cancelled. ${isPrepaid ? `100% refund of ₹${computedRefundAmount} processed!` : 'For Cash on Delivery, any cash paid will be refunded directly via the delivery executive.'}`
     });
+  } catch (err) {
+    await conn.rollback();
+    res.status(500).json({ success: false, error: err.message });
+  } finally {
+    conn.release();
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// 8. WALLET RECHARGE & TRANSACTIONS APIS
+// ═══════════════════════════════════════════════════════════════
+
+app.get('/api/wallet/balance', checkDbConnection, async (req, res) => {
+  try {
+    const userEmail = req.query.email;
+    if (!userEmail) return res.status(400).json({ success: false, error: 'Email parameter is required.' });
+    const [[user]] = await pool.query('SELECT id, name, email, wallet_balance FROM users WHERE email = ?', [userEmail.toLowerCase().trim()]);
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+    res.json({ success: true, balance: Number(user.wallet_balance) });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/wallet/topup', checkDbConnection, async (req, res) => {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const { email, amount, paymentMethod, note } = req.body;
+    const numAmt = Number(amount);
+    if (!email || isNaN(numAmt) || numAmt <= 0) {
+      await conn.rollback();
+      return res.status(400).json({ success: false, error: 'Valid user email and positive top-up amount are required.' });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const [[user]] = await conn.query('SELECT id, name, email, wallet_balance FROM users WHERE email = ?', [cleanEmail]);
+    if (!user) {
+      await conn.rollback();
+      return res.status(404).json({ success: false, error: 'User not found in MySQL.' });
+    }
+
+    await conn.query('UPDATE users SET wallet_balance = wallet_balance + ? WHERE email = ?', [numAmt, cleanEmail]);
+    const updatedBalance = Number(user.wallet_balance) + numAmt;
+
+    const txnId = `TXN-TOPUP-${Math.floor(100000 + Math.random() * 900000)}`;
+    await conn.query(`
+      INSERT INTO payment_transactions (id, order_id, customer_name, customer_email, amount, method, status, notes)
+      VALUES (?, 'TOPUP', ?, ?, ?, ?, 'success', ?)
+    `, [
+      txnId,
+      user.name,
+      cleanEmail,
+      numAmt,
+      paymentMethod || 'Online Top-Up',
+      note || 'FoodFlow Wallet Recharge'
+    ]);
+
+    await conn.query('INSERT INTO system_audit_logs (level, text) VALUES (?, ?)', [
+      'INFO',
+      `Wallet top-up of ₹${numAmt} for ${user.name} (${cleanEmail}). New balance: ₹${updatedBalance.toFixed(2)}`
+    ]);
+
+    await conn.commit();
+    res.json({ success: true, newBalance: updatedBalance, message: `₹${numAmt} added to FoodFlow Wallet in MySQL!` });
   } catch (err) {
     await conn.rollback();
     res.status(500).json({ success: false, error: err.message });
@@ -1177,47 +1257,7 @@ app.get('/api/refunds', checkDbConnection, async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// 9. REVIEWS & RATINGS APIS
-// ═══════════════════════════════════════════════════════════════
-
-app.get('/api/reviews/restaurant/:restaurantId', checkDbConnection, async (req, res) => {
-  try {
-    const restId = req.params.restaurantId;
-    const [rows] = await pool.query('SELECT * FROM reviews_ratings WHERE restaurant_id = ? ORDER BY created_at DESC', [restId]);
-    res.json({ success: true, data: rows });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-app.post('/api/reviews', checkDbConnection, async (req, res) => {
-  try {
-    const { order_id, restaurant_id, user_email, customer_name, food_rating, delivery_rating, comment } = req.body;
-    if (!order_id || !restaurant_id || !food_rating) {
-      return res.status(400).json({ success: false, error: 'Order ID, Restaurant ID and Rating are required.' });
-    }
-
-    await pool.query(`
-      INSERT INTO reviews_ratings (order_id, restaurant_id, user_email, customer_name, food_rating, delivery_rating, comment)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `, [
-      order_id,
-      restaurant_id,
-      (user_email || '').toLowerCase().trim(),
-      customer_name || 'Customer',
-      food_rating,
-      delivery_rating || 5,
-      comment || ''
-    ]);
-
-    res.status(201).json({ success: true, message: 'Review submitted and restaurant rating updated in MySQL!' });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// ═══════════════════════════════════════════════════════════════
-// 10. SAVED ADDRESSES APIS
+// 9. SAVED ADDRESSES APIS
 // ═══════════════════════════════════════════════════════════════
 
 app.get('/api/addresses', checkDbConnection, async (req, res) => {
@@ -1239,19 +1279,27 @@ app.post('/api/addresses', checkDbConnection, async (req, res) => {
       return res.status(400).json({ success: false, error: 'User email and street address are required.' });
     }
 
+    const cleanEmail = userEmail.toLowerCase().trim();
+    const cleanAddress = addressText.trim();
+
+    const [existing] = await pool.query('SELECT * FROM user_addresses WHERE user_email = ? AND address_text = ?', [cleanEmail, cleanAddress]);
+    if (existing.length > 0) {
+      return res.status(409).json({ success: false, error: 'This address is already saved in your address book.' });
+    }
+
     if (is_default) {
-      await pool.query('UPDATE user_addresses SET is_default = FALSE WHERE user_email = ?', [userEmail.toLowerCase().trim()]);
+      await pool.query('UPDATE user_addresses SET is_default = FALSE WHERE user_email = ?', [cleanEmail]);
     }
 
     await pool.query(`
       INSERT INTO user_addresses (user_email, label, recipient_name, recipient_phone, address_text, city, pincode, is_default)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `, [
-      userEmail.toLowerCase().trim(),
+      cleanEmail,
       label || 'Home',
       recipient_name || 'Customer',
       recipient_phone || '+91 98765 43210',
-      addressText,
+      cleanAddress,
       city || 'Hyderabad',
       pincode || '500081',
       Boolean(is_default)
@@ -1303,7 +1351,7 @@ app.put('/api/settings', checkDbConnection, async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// 11. ADMIN ANALYTICS & CSV EXPORT APIS
+// 10. ADMIN ANALYTICS & CSV EXPORT
 // ═══════════════════════════════════════════════════════════════
 
 app.get('/api/admin/analytics/dashboard', checkDbConnection, async (req, res) => {
@@ -1359,74 +1407,45 @@ app.get('/api/admin/export/orders.csv', checkDbConnection, async (req, res) => {
     });
 
     res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename="foodflow_orders_${Date.now()}.csv"`);
-    res.send(csvContent);
+    res.setHeader('Content-Disposition', 'attachment; filename="foodflow_orders_export.csv"');
+    res.status(200).send(csvContent);
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// ═══════════════════════════════════════════════════════════════
-// 12. SYSTEM AUDIT LOGS APIS
-// ═══════════════════════════════════════════════════════════════
-
-app.get('/api/logs', checkDbConnection, async (req, res) => {
-  try {
-    const [rows] = await pool.query('SELECT * FROM system_audit_logs ORDER BY id DESC LIMIT 50');
-    const formatted = rows.map((r) => ({
-      id: r.id,
-      level: r.level,
-      text: r.text,
-      time: new Date(r.created_at).toLocaleTimeString()
-    }));
-    res.json({ success: true, data: formatted });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-app.post('/api/logs', checkDbConnection, async (req, res) => {
-  try {
-    const { level, text } = req.body;
-    await pool.query('INSERT INTO system_audit_logs (level, text) VALUES (?, ?)', [level || 'INFO', text || 'System event']);
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// Fallback Route to serve index.html for SPA routes
+// Fallback HTML routing
 app.get('*', (req, res) => {
+  if (req.path.startsWith('/api')) {
+    return res.status(404).json({ success: false, error: 'API endpoint not found' });
+  }
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Start Server with Auto-Fallback on Port Conflict (EADDRINUSE)
-function startServer(portToTry) {
-  const server = app.listen(portToTry, '0.0.0.0' ,() => {
-    console.log(`
-  ═══════════════════════════════════════════════════════════════
-  🚀 FoodFlow Enterprise MySQL REST API Server Online (${portToTry})
-  ═══════════════════════════════════════════════════════════════
-  ➜ Web App URL:       http://localhost:${portToTry}
-  ➜ Customer Portal:   http://localhost:${portToTry}/customer.html
-  ➜ Admin Portal:      http://localhost:${portToTry}/admin.html
-  ➜ QA Test Suite:     http://localhost:${portToTry}/test-suite.html
-  ➜ MySQL Health API:  http://localhost:${portToTry}/api/health
-  ➜ Orders API:        http://localhost:${portToTry}/api/orders
-  ➜ Database Config:   MySQL ${dbConfig.user}@${dbConfig.host}:${dbConfig.port}/${dbConfig.database}
-  ═══════════════════════════════════════════════════════════════
-    `);
+// ═══════════════════════════════════════════════════════════════
+// 11. AUTOMATIC PORT DISCOVERY & SERVER BOOTSTRAP
+// ═══════════════════════════════════════════════════════════════
+
+function startServer(port) {
+  const server = app.listen(port, () => {
+    app.set('port', port);
+    console.log(`\n======================================================`);
+    console.log(`🍕 FoodFlow Production Backend API Server`);
+    console.log(`🚀 Server Running Live at: http://localhost:${port}`);
+    console.log(`🐬 Database Target: MySQL (${dbConfig.database})`);
+    console.log(`📋 Admin Dashboard: http://localhost:${port}/admin.html`);
+    console.log(`======================================================\n`);
+    initDbPool();
   });
 
   server.on('error', (err) => {
     if (err.code === 'EADDRINUSE') {
-      console.warn(`\n⚠️  Port ${portToTry} is in use by another background process.`);
-      console.warn(`🔄 Automatically switching to fallback port ${portToTry + 1}...\n`);
-      startServer(portToTry + 1);
+      console.warn(`[Port Conflict] Port ${port} is currently busy. Trying next port ${port + 1}...`);
+      startServer(port + 1);
     } else {
-      console.error('Server error:', err);
+      console.error('[Server Error]', err);
     }
   });
 }
 
-startServer(Number(PORT) || 5000);
+startServer(DEFAULT_PORT);
