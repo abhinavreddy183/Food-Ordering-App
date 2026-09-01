@@ -33,6 +33,7 @@ pipeline {
         stage('Deploy') {
             steps {
                 echo '=== Deploying Food Delivery App using Docker Compose ==='
+                bat 'if not exist .env copy .env.example .env'
                 bat 'docker compose up -d'
             }
         }
