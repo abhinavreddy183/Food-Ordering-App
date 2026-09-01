@@ -3299,3 +3299,111 @@ img, video, svg, canvas {
     padding: 6px 8px;
   }
 }
+/* ═══════════════════════ ADMIN PORTAL GATEKEEPER LOCK SCREEN ═══════════════════════ */
+.admin-gatekeeper-wrapper {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 50% 20%, #1E2235 0%, #0D0F18 100%);
+  padding: 1.5rem 1rem;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 9999;
+}
+.admin-gatekeeper-card {
+  background: #151824;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  width: 100%;
+  max-width: 440px;
+  padding: 2.25rem 2rem;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+  color: #fff;
+  text-align: left;
+}
+.admin-gatekeeper-header {
+  text-align: center;
+  margin-bottom: 1.75rem;
+}
+.admin-gatekeeper-icon {
+  width: 64px;
+  height: 64px;
+  background: linear-gradient(135deg, rgba(232, 93, 47, 0.2), rgba(232, 93, 47, 0.05));
+  border: 1.5px solid rgba(232, 93, 47, 0.4);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  margin: 0 auto 1rem;
+}
+.admin-gatekeeper-title {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #fff;
+  margin-bottom: 4px;
+}
+.admin-gatekeeper-sub {
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+.admin-gatekeeper-badge {
+  display: inline-block;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #F87171;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 20px;
+  margin-top: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.admin-gatekeeper-card label {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.82rem;
+  font-weight: 600;
+  display: block;
+  margin-bottom: 6px;
+}
+.admin-gatekeeper-card input {
+  background: #0E101A;
+  border: 1.5px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  border-radius: 8px;
+  padding: 11px 14px;
+  font-size: 0.92rem;
+  width: 100%;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+.admin-gatekeeper-card input:focus {
+  border-color: var(--primary);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(232, 93, 47, 0.25);
+}
+.admin-gatekeeper-btn {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 13px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  width: 100%;
+  cursor: pointer;
+  margin-top: 1.25rem;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.admin-gatekeeper-btn:hover {
+  background: var(--primary-dark);
+  transform: translateY(-1px);
+}
