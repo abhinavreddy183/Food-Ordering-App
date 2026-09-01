@@ -10,21 +10,43 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 </head>
 <body>
-  <!-- Top Switcher -->
-  <header class="global-switcher-bar">
-    <div class="switcher-left">
-      <span class="brand-badge">FoodFlow Admin Panel</span>
-      <a href="customer.html" class="switcher-tab">🛍️ Customer Portal</a>
-      <a href="test-suite.html" class="switcher-tab">🧪 Test Suite (31 Tests)</a>
-    </div>
-    <div class="switcher-right">
-      <div class="db-status-badge" id="topDbStatusBadge" onclick="handleRetestMysqlConnection()" style="cursor:pointer;" title="Click to test MySQL connection">
-        <span class="live-dot" id="topDbStatusDot"></span> <span id="topDbStatusText">MySQL Database</span>
+
+  <!-- ═══════════════════════ SECURE ADMIN AUTH GATEKEEPER ═══════════════════════ -->
+  <div id="adminAuthGatekeeper" class="admin-gatekeeper-wrapper">
+    <div class="admin-gatekeeper-card">
+      <div class="admin-gatekeeper-header">
+        <div class="admin-gatekeeper-icon">🛡️</div>
+        <div class="admin-gatekeeper-title">FoodFlow Admin Portal</div>
+        <div class="admin-gatekeeper-sub">Enterprise Management & Access Control</div>
+        <div class="admin-gatekeeper-badge">🔒 Restricted — Authorized Staff Only</div>
+      </div>
+
+      <div class="form-group" style="margin-bottom: 1.1rem;">
+        <label>Administrator Email / Username</label>
+        <input type="text" id="adminLoginEmail" placeholder="e.g. admin@foodflow.com" autocomplete="username">
+      </div>
+
+      <div class="form-group" style="margin-bottom: 1.1rem;">
+        <label>Admin Security Password</label>
+        <div class="input-with-icon" style="position:relative;">
+          <input type="password" id="adminLoginPassword" placeholder="Enter administrator password" autocomplete="current-password" onkeydown="if(event.key==='Enter') handleAdminLogin()">
+          <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('adminLoginPassword', this)" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:#fff; cursor:pointer;" title="Toggle password visibility">👁️</button>
+        </div>
+      </div>
+
+      <div class="field-error" id="err-adminLogin" style="margin-bottom: 12px; color:#F87171; font-size:0.82rem; font-weight:600;"></div>
+
+      <button class="admin-gatekeeper-btn" onclick="handleAdminLogin()">
+        Unlock Admin Dashboard 🔐
+      </button>
+
+      <div style="text-align:center; margin-top:1.5rem; font-size:0.75rem; color:rgba(255,255,255,0.45); line-height:1.4;">
+        🔒 256-bit Encrypted Session · Access restricted strictly to store operators.
       </div>
     </div>
-  </header>
+  </div>
 
-  <div class="admin-wrapper">
+  <div class="admin-wrapper" id="protectedAdminWrapper" style="display: none;">
     <!-- ADMIN SIDEBAR -->
     <aside class="admin-sidebar">
       <div class="admin-sidebar-logo">
@@ -64,13 +86,16 @@
       </button>
 
       <div class="admin-sidebar-footer">
-        <div class="admin-profile">
+        <div class="admin-profile" style="margin-bottom: 0.75rem;">
           <div class="admin-avatar">SA</div>
           <div>
             <div class="admin-name">Super Admin</div>
             <div class="admin-role">admin@foodflow.com</div>
           </div>
         </div>
+        <button class="action-btn danger" style="width: 100%; padding: 8px; font-weight: 700; font-size: 0.8rem; justify-content: center;" onclick="handleAdminLogout()">
+          🚪 Lock / Sign Out
+        </button>
       </div>
     </aside>
 
@@ -80,6 +105,11 @@
         <div class="admin-topbar-left">
           <span class="admin-topbar-title" id="adminTopbarTitle">Dashboard Overview</span>
           <span class="admin-topbar-sub" id="adminTopbarSub">Real-time sales, order volume and analytics</span>
+        </div>
+        <div class="admin-topbar-right">
+          <div class="db-status-badge" id="topDbStatusBadge" onclick="handleRetestMysqlConnection()" style="cursor:pointer;" title="Click to test MySQL connection">
+            <span class="live-dot" id="topDbStatusDot"></span> <span id="topDbStatusText">MySQL Database</span>
+          </div>
         </div>
       </header>
 
@@ -184,110 +214,27 @@
         </div>
       </div>
 
-      <!-- SETTINGS & PROMO COUPONS -->
+      <!-- SETTINGS -->
       <div class="admin-page" id="admin-page-settings">
         <div class="two-col">
-          <!-- Platform Configuration -->
           <div class="card">
-            <div class="card-header"><span class="card-title">⚙️ Platform Configuration</span></div>
+            <div class="card-header"><span class="card-title">Platform Configuration</span></div>
             <div class="card-body">
-              <div class="form-group">
-                <label>Platform Name</label>
-                <input type="text" id="admSetPlatformName" value="FoodFlow">
-              </div>
-              <div class="form-row">
-                <div class="form-group">
-                  <label>Default Delivery Fee (₹)</label>
-                  <input type="number" id="admSetDeliveryFee" value="40" min="0" max="500">
-                </div>
-                <div class="form-group">
-                  <label>Platform Commission Fee (₹)</label>
-                  <input type="number" id="admSetPlatformFee" value="5" min="0" max="100">
-                </div>
-              </div>
-              <div class="form-row">
-                <div class="form-group">
-                  <label>Support Helpline Number</label>
-                  <input type="text" id="admSetSupportPhone" value="+91 1800-200-8899">
-                </div>
-                <div class="form-group">
-                  <label>Support Email Address</label>
-                  <input type="email" id="admSetSupportEmail" value="support@foodflow.com">
-                </div>
-              </div>
-              <button class="btn-primary" style="margin-top:0.5rem;" onclick="savePlatformSettingsForm()">
-                💾 Save Global Configuration
-              </button>
+              <div class="form-group"><label>Platform Name</label><input type="text" value="FoodFlow" readonly></div>
+              <div class="form-group"><label>Default Delivery Fee (₹)</label><input type="number" value="40" readonly></div>
+              <div class="form-group"><label>Platform Commission Fee (₹)</label><input type="number" value="5" readonly></div>
             </div>
           </div>
 
-          <!-- 2. Promo Coupons & Discounts Management -->
           <div class="card">
-            <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
-              <span class="card-title">🎟️ Promo Codes & Coupons (<span id="admPromoCountBadge">0</span>)</span>
-              <button class="btn-primary" style="padding:6px 14px; font-size:0.85rem;" onclick="openAddPromoModal()">
-                + Add Coupon
-              </button>
+            <div class="card-header">
+              <span class="card-title">Active Promo Codes</span>
             </div>
-            <div class="card-body" style="padding:0.75rem 1.25rem;">
-              <div id="admSettingsPromosList"></div>
-            </div>
+            <div class="card-body" style="padding:0.75rem 1.25rem;" id="admSettingsPromosList"></div>
           </div>
         </div>
       </div>
     </main>
-  </div>
-
-  <!-- PROMO COUPON MODAL (ADD / EDIT) -->
-  <div class="modal-backdrop" id="adminPromoModal">
-    <div class="modal-box" style="width:480px;">
-      <button class="modal-close-btn" onclick="closeAdminModal('adminPromoModal')">✕</button>
-      <h3 id="adminPromoModalTitle">🎟️ Add Promo Coupon</h3>
-      <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:1rem;">Configure coupon discounts, caps, and minimum order requirements.</p>
-      
-      <input type="hidden" id="adminPromoOldCode" value="">
-
-      <div class="form-group">
-        <label>Promo Code <span style="color:var(--danger);">*</span></label>
-        <input type="text" id="adminPromoCodeInput" placeholder="e.g. FOODFLOW50" style="text-transform:uppercase; font-weight:700; letter-spacing:1px;">
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label>Discount % <span style="color:var(--danger);">*</span></label>
-          <input type="number" id="adminPromoDiscountInput" placeholder="e.g. 50" min="1" max="100">
-        </div>
-        <div class="form-group">
-          <label>Max Discount Cap (₹) <span style="color:var(--danger);">*</span></label>
-          <input type="number" id="adminPromoMaxDiscountInput" placeholder="e.g. 150" min="1" max="5000">
-        </div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label>Minimum Order Value (₹) <span style="color:var(--danger);">*</span></label>
-          <input type="number" id="adminPromoMinOrderInput" placeholder="e.g. 199" min="0" max="10000">
-        </div>
-        <div class="form-group" style="display:flex; align-items:center; margin-top:24px;">
-          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:700;">
-            <input type="checkbox" id="adminPromoActiveCheckbox" checked style="width:18px; height:18px; cursor:pointer;">
-            <span>Coupon Active</span>
-          </label>
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label>Description / Marketing Tagline</label>
-        <input type="text" id="adminPromoDescInput" placeholder="e.g. 50% OFF up to ₹150 on orders above ₹199">
-      </div>
-
-      <div class="field-error" id="err-adminPromo" style="margin-bottom:10px;"></div>
-
-      <div class="modal-actions">
-        <button class="btn-ghost" onclick="closeAdminModal('adminPromoModal')">Cancel</button>
-        <button class="btn-primary" onclick="submitAdminPromoForm()">Save Promo Coupon</button>
-      </div>
-    </div>
   </div>
 
   <!-- STATUS MODAL -->
@@ -330,9 +277,8 @@
           <label style="font-size:0.82rem;">Admin Remarks / Notes (Optional)</label>
           <textarea id="admCancelNotes" placeholder="Enter specific explanation for customer & logs..." style="height:55px; resize:none; font-size:0.85rem;"></textarea>
         </div>
-        <div style="font-size:0.78rem; color:#166534; background:#E8F8EE; padding:8px 10px; border-radius:6px; border:1px solid #86EFAC; line-height:1.4;">
-          <strong>✓ Prepaid Orders:</strong> Automated 100% refund is credited back to customer's payment method.<br>
-          <strong>💵 Cash on Delivery Orders:</strong> Any collected cash will be returned directly by the delivery executive.
+        <div style="font-size:0.78rem; color:#166534; background:#E8F8EE; padding:6px 10px; border-radius:6px; border:1px solid #86EFAC;">
+          ✓ Automated 100% refund will be issued to customer's payment method upon cancellation.
         </div>
       </div>
 
