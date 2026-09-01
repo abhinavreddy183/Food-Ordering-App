@@ -1,81 +1,61 @@
 pipeline {
     agent any
 
-    environment {
-        APP_NAME        = 'foodflow'
-        DOCKER_IMAGE    = 'foodflow-web'
-        DOCKER_TAG      = "${BUILD_NUMBER}"
-        REGISTRY_HOST   = 'docker.io'
-        STAGING_HOST    = 'staging.foodflow.internal'
-        PROD_HOST       = 'foodflow.com'
-    }
-
     stages {
-        stage('Checkout SCM') {
+
+        stage('Checkout') {
             steps {
-                echo '=== PB-09: Fetching code from GitHub repository (main branch) ==='
-                checkout scm
+                echo '=== Checking out Food Delivery App source code ==='
             }
         }
 
-        stage('Static Code Analysis & Lint') {
+        stage('Install Dependencies') {
             steps {
-                echo '=== Verifying HTML5, CSS3, ES6 syntax & SRS compliance ==='
-                sh 'echo "Syntax validation passed with 0 lint errors."'
+                echo '=== Installing Node.js dependencies ==='
+                bat 'npm ci'
             }
         }
 
-        stage('Automated Integration Tests (PB-26)') {
+        stage('Syntax Check') {
             steps {
-                echo '=== Running automated test suite across all 14 test cases ==='
-                sh 'echo "Test Case 1-14: Store, Auth, Cart, Orders, Admin Sync, Refunds -> 100% PASSED"'
+                echo '=== Checking server.js syntax ==='
+                bat 'node --check server.js'
             }
         }
 
-        stage('Docker Image Build (PB-11, PB-27)') {
+        stage('Docker Build') {
             steps {
-                echo "=== Building Docker image: ${DOCKER_IMAGE}:${DOCKER_TAG} ==="
-                sh "docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} -t ${DOCKER_IMAGE}:latest ."
+                echo '=== Building Food Delivery App Docker image ==='
+                bat 'docker build -t foodflow-web:%BUILD_NUMBER% .'
             }
         }
 
-        stage('Container Security Vulnerability Scan') {
+        stage('Deploy') {
             steps {
-                echo '=== Running Trivy container security vulnerability scanner ==='
-                sh 'echo "Container scan completed: 0 HIGH / 0 CRITICAL vulnerabilities found."'
+                echo '=== Deploying Food Delivery App using Docker Compose ==='
+                bat 'docker compose up -d'
             }
         }
 
-        stage('Deploy to Staging Environment') {
+        stage('Application Verification') {
             steps {
-                echo "=== Deploying ${DOCKER_IMAGE}:${DOCKER_TAG} to Staging ==="
-                sh 'docker compose up -d'
-            }
-        }
-
-        stage('Smoke & Health Verification (PB-29)') {
-            steps {
-                echo '=== Running health check endpoint assertions ==='
-                sh 'echo "Healthcheck response 200 OK — Uptime stable."'
-            }
-        }
-
-        stage('Production Approval & Deployment (PB-28)') {
-            steps {
-                echo '=== Production deployment successful on FoodFlow cluster ==='
+                echo '=== Verifying Docker containers ==='
+                bat 'docker compose ps'
             }
         }
     }
 
     post {
-        always {
-            echo 'Archiving build artifacts and test report outputs.'
-        }
         success {
-            echo "🎉 Jenkins Build #${BUILD_NUMBER} SUCCESSFUL. FoodFlow deployed!"
+            echo '=== Food Delivery App CI/CD Pipeline SUCCESS ==='
         }
+
         failure {
-            echo "❌ Jenkins Build #${BUILD_NUMBER} FAILED. Notifying DevOps team."
+            echo '=== Food Delivery App CI/CD Pipeline FAILED ==='
+        }
+
+        always {
+            echo '=== Jenkins pipeline execution completed ==='
         }
     }
 }
