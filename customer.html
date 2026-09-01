@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FoodFlow — Delicious Food Delivered Fast</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- ═══════════════════════ CUSTOMER NAVIGATION ═══════════════════════ -->
+  <nav class="customer-nav">
+    <div class="logo" onclick="showCustomerScreen('home')">
+      🍕 Food<span>Flow</span>
+    </div>
+    <div class="nav-actions">
+      <button class="nav-btn" onclick="showCustomerScreen('home')">Home</button>
+      <button class="nav-btn" onclick="openCustomerOrders()">My Orders</button>
+      <button class="nav-btn" id="navAuthBtn" onclick="openCustomerProfile()">Sign In</button>
+      <button class="cart-btn" onclick="proceedToCheckout()">
+        🛒 Cart <span class="cart-count" id="navCartCount">0</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- ═══════════════════════ CUSTOMER PORTAL SCREENS ═══════════════════════ -->
+  <div id="customerPortalContainer">
+    
+    <!-- 1. HOME SCREEN -->
+    <div class="customer-screen active" id="cust-screen-home">
+      <div class="hero">
+        <h1>Hungry? Get it <em>delivered fast</em></h1>
+        <p>Order from the finest restaurants in your city. Fresh ingredients, hot delivery, guaranteed taste.</p>
+        <div class="search-bar">
+          <input type="text" id="custSearchInput" placeholder="Search restaurants, dishes or cuisines (e.g. Biryani, Burger, Pizza, Fries)..." oninput="handleCustomerSearch(this.value)" autocomplete="off">
+          <button onclick="handleCustomerSearch(document.getElementById('custSearchInput').value)">Search</button>
+        </div>
+      </div>
+
+      <div style="padding: 2rem 2rem 0; max-width: 1200px; margin: 0 auto;">
+        <div class="promo-banner">
+          <div>
+            <h3>50% Special Discount! 🎉</h3>
+            <p>Use promo code <strong>KBSIRSTUDENT</strong> at checkout for up to ₹150 discount.</p>
+          </div>
+          <span class="promo-code" onclick="showToast('Code KBSIRSTUDENT copied!')">KBSIRSTUDENT</span>
+        </div>
+      </div>
+
+      <div style="padding: 1rem 2rem 0.5rem; max-width: 1200px; margin: 0 auto;">
+        <div class="categories">
+          <button class="cat-pill active" onclick="filterByCuisinePill('All', this)"><span>🏠</span> All</button>
+          <button class="cat-pill" onclick="filterByCuisinePill('Biryani', this)"><span>🍛</span> Biryani</button>
+          <button class="cat-pill" onclick="filterByCuisinePill('Pizza', this)"><span>🍕</span> Pizza</button>
+          <button class="cat-pill" onclick="filterByCuisinePill('Burger', this)"><span>🍔</span> Burger</button>
+          <button class="cat-pill" onclick="filterByCuisinePill('Chinese', this)"><span>🍜</span> Chinese</button>
+          <button class="cat-pill" onclick="filterByCuisinePill('South Indian', this)"><span>🥘</span> South Indian</button>
+          <button class="cat-pill" onclick="filterByCuisinePill('Desserts', this)"><span>🍰</span> Desserts</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-header" id="homeSectionHeader">
+          <span class="section-title" id="homeSectionTitle">Top Restaurants Near You</span>
+          <a class="see-all" id="homeSeeAllLink" onclick="filterByCuisinePill('All', null)">View All</a>
+        </div>
+
+        <div id="homeSearchResultsBar"></div>
+
+        <div class="restaurants-grid" id="restaurantsGrid"></div>
+
+        <div id="homeMatchingDishesContainer"></div>
+      </div>
+    </div>
+
+    <!-- 2. MENU SCREEN -->
+    <div class="customer-screen" id="cust-screen-menu">
+      <div class="menu-header" id="menuScreenHeader"></div>
+      <div class="menu-layout">
+        <div>
+          <div class="menu-categories-nav" id="menuCatNav"></div>
+          <div id="menuItemsContainer"></div>
+        </div>
+        <div>
+          <div class="cart-panel" id="cartPanelSide">
+            <div class="cart-header">
+              <span class="cart-title">Your Order</span>
+              <span style="font-size:0.85rem; color:var(--text-muted);" id="cartSideRestName"></span>
+            </div>
+            <div id="cartSideItems"></div>
+            <div class="cart-footer" id="cartSideFooter"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. CHECKOUT & PAYMENT SCREEN -->
+    <div class="customer-screen" id="cust-screen-checkout">
+      <div class="checkout-layout">
+        <div>
+          <button class="back-btn" style="color:var(--text); background:var(--surface2); margin-bottom:1rem;" onclick="showCustomerScreen('menu')">← Back to Menu</button>
+          <div class="form-card">
+            <h3>📍 Delivery Address</h3>
+            <div class="form-row">
+              <div class="form-group" id="group-delivName">
+                <label>Full Name <span style="color:var(--danger); font-weight:700;">*</span></label>
+                <input type="text" id="delivName" placeholder="Enter recipient full name" oninput="clearFieldError('delivName')">
+                <div class="field-error" id="err-delivName"></div>
+              </div>
+              <div class="form-group" id="group-delivPhone">
+                <label>Phone Number <span style="color:var(--danger); font-weight:700;">*</span></label>
+                <input type="tel" id="delivPhone" placeholder="10-digit mobile number" maxlength="10" oninput="clearFieldError('delivPhone')">
+                <div class="field-error" id="err-delivPhone"></div>
+              </div>
+            </div>
+            <div class="form-group" id="group-delivAddress">
+              <label>Street Address <span style="color:var(--danger); font-weight:700;">*</span></label>
+              <input type="text" id="delivAddress" placeholder="Flat / Building, Landmark, Area, Street..." oninput="clearFieldError('delivAddress')">
+              <div class="field-error" id="err-delivAddress"></div>
+            </div>
+            <div class="form-row">
+              <div class="form-group" id="group-delivCity">
+                <label>City <span style="color:var(--danger); font-weight:700;">*</span></label>
+                <input type="text" id="delivCity" value="Hyderabad" placeholder="City" oninput="clearFieldError('delivCity')">
+                <div class="field-error" id="err-delivCity"></div>
+              </div>
+              <div class="form-group" id="group-delivPincode">
+                <label>PIN Code <span style="color:var(--danger); font-weight:700;">*</span></label>
+                <input type="text" id="delivPincode" value="500081" placeholder="6-digit PIN Code" maxlength="6" oninput="clearFieldError('delivPincode')">
+                <div class="field-error" id="err-delivPincode"></div>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Delivery Instructions (Optional)</label>
+              <textarea id="delivNotes" placeholder="Ring the bell, leave at doorstep, etc." style="height:65px; resize:none;"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="order-summary">
+            <h3>Order Summary</h3>
+            <div id="checkoutItemsList"></div>
+            <hr class="summary-divider">
+            <div class="summary-item"><span>Subtotal</span><span id="chkSubtotal">₹0</span></div>
+            <div class="summary-item"><span>Delivery Fee</span><span id="chkDelivery">Free</span></div>
+            <div class="summary-item"><span>Platform Fee</span><span>₹5</span></div>
+            <div class="summary-item"><span style="color:var(--success);">Promo Discount</span><span style="color:var(--success);" id="chkDiscount">-₹0</span></div>
+            <hr class="summary-divider">
+            <div class="summary-total"><span>Grand Total</span><span id="chkTotal">₹0</span></div>
+
+            <div class="form-group" style="margin-top:1.25rem;">
+              <label>Apply Promo Coupon</label>
+              <div style="display:flex; gap:8px;">
+                <input type="text" id="promoCodeInput" placeholder="Enter coupon code (e.g. KBSIRSTUDENT)" style="flex:1; text-transform:uppercase;">
+                <button onclick="handleApplyPromo()" style="background:var(--primary); color:#fff; border:none; padding:0 18px; border-radius:8px; cursor:pointer; font-weight:700;">Apply</button>
+              </div>
+              <div id="promoFeedbackMsg" style="font-size:0.82rem; margin-top:6px; font-weight:600;"></div>
+            </div>
+
+            <button class="place-order-btn" onclick="handlePlaceOrder()">Proceed to Payment →</button>
+            <p style="font-size:0.75rem; color:var(--text-muted); text-align:center; margin-top:0.75rem;">🔒 256-bit Encrypted Secure Checkout</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. ORDER SUCCESS & TRACKING SCREEN -->
+    <div class="customer-screen" id="cust-screen-success">
+      <div class="order-success">
+        <div class="success-icon">🎉</div>
+        <div class="success-title">Order Confirmed!</div>
+        <div class="success-sub">The kitchen has received your order and is preparing it fresh. Estimated delivery: <strong>25–35 mins</strong>.</div>
+        <div class="order-id-badge" id="successOrderIdDisplay">Order ID: #ORD-XXXX</div>
+
+        <div class="tracking-card">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+            <h3 style="font-size:1.15rem; font-weight:700;">Live Order Status</h3>
+            <span class="badge badge-success"><span class="live-dot"></span> Live Sync</span>
+          </div>
+          <p style="font-size:0.84rem; color:var(--text-muted); margin-bottom:1rem;">Updates in real-time as your food is prepared and dispatched.</p>
+          <div class="tracking-steps" id="liveTrackingSteps"></div>
+        </div>
+
+        <div style="display:flex; gap:1rem; justify-content:center; margin-top:2rem; flex-wrap:wrap;">
+          <button class="btn-primary" onclick="showCustomerScreen('home')">Order More Food</button>
+          <button class="btn-ghost" onclick="openCustomerOrders()">View All Orders</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. PROFILE & HISTORY SCREEN -->
+    <div class="customer-screen" id="cust-screen-profile">
+      <div class="profile-layout">
+        <div class="profile-sidebar">
+          <div class="profile-avatar" id="profileDispAvatar">U</div>
+          <div class="profile-name" id="profileDispName">User Profile</div>
+          <div class="profile-email" id="profileDispEmail">user@example.com</div>
+          <div class="sidebar-nav">
+            <button class="sidebar-nav-item active" onclick="setProfileTab('orders', this)">📋 My Orders</button>
+            <button class="sidebar-nav-item" onclick="setProfileTab('addresses', this)">📍 Saved Addresses</button>
+            <button class="sidebar-nav-item" onclick="setProfileTab('wallet', this)">👛 FoodFlow Wallet</button>
+            <button class="sidebar-nav-item" onclick="setProfileTab('settings', this)">⚙️ Account Settings</button>
+            <button class="sidebar-nav-item" onclick="handleCustomerLogout()" style="color:var(--danger); margin-top:1rem;">🚪 Sign Out</button>
+          </div>
+        </div>
+        <div id="profileContentArea"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════════════ MODALS ═══════════════════════ -->
+
+  <!-- 1. SIGN OUT CONFIRMATION MODAL -->
+  <div class="modal-backdrop" id="signOutConfirmModal">
+    <div class="modal-box" style="width:400px; text-align:center; padding:1.75rem 1.5rem;">
+      <div style="font-size:2.6rem; margin-bottom:0.5rem;">🚪</div>
+      <h3 style="margin-bottom:0.4rem;">Sign Out from FoodFlow?</h3>
+      <p style="color:var(--text-muted); font-size:0.88rem; margin-bottom:1.5rem;">
+        Are you sure you want to sign out? You can sign back in anytime to access your orders and saved addresses.
+      </p>
+      <div style="display:flex; gap:10px;">
+        <button class="btn-ghost" style="flex:1;" onclick="closeAdminModal('signOutConfirmModal')">Stay Signed In</button>
+        <button class="action-btn danger" style="flex:1; padding:10px; font-weight:700;" onclick="confirmCustomerLogout()">Yes, Sign Out</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. PROFILE CHANGE OTP VERIFICATION MODAL -->
+  <div class="modal-backdrop" id="profileVerifyOtpModal">
+    <div class="modal-box" style="width:420px;">
+      <button class="modal-close-btn" onclick="closeAdminModal('profileVerifyOtpModal')">✕</button>
+      <div style="text-align:center; margin-bottom:0.75rem;">
+        <div style="font-size:2.2rem; margin-bottom:4px;">🔐</div>
+        <h3 style="margin-bottom:4px;">Verify Contact Details</h3>
+        <p style="color:var(--text-muted); font-size:0.85rem; margin:0;">
+          A 6-digit verification code has been sent to confirm changes for <strong id="profileOtpTargetDisplay">target</strong>.
+        </p>
+      </div>
+
+      <!-- Live OTP Demonstration Banner -->
+      <div style="background:#FEF3C7; border:1px solid #FCD34D; color:#92400E; padding:8px 12px; border-radius:8px; font-size:0.85rem; margin:0.75rem 0; display:flex; justify-content:space-between; align-items:center;">
+        <div>🔑 OTP Code: <strong id="profileOtpCodeHint" style="font-size:1.05rem; letter-spacing:2px;">123456</strong></div>
+        <button type="button" onclick="autoFillProfileOtp()" style="padding:4px 10px; font-size:0.75rem; font-weight:700; border-radius:6px; background:var(--primary); color:#fff; border:none; cursor:pointer;">Auto-fill</button>
+      </div>
+
+      <div class="form-group" style="max-width:240px; margin:0 auto 0.75rem;">
+        <input type="text" id="profileChangeOtpInput" placeholder="Enter 6-digit OTP" maxlength="10" onkeydown="if(event.key==='Enter') verifyAndSaveProfileOtp()" style="text-align:center; font-size:1.3rem; letter-spacing:4px; font-weight:800;">
+      </div>
+      <div class="field-error" id="err-profileChangeOtp" style="text-align:center; margin-bottom:10px;"></div>
+      <div class="modal-actions" style="margin-top:1rem;">
+        <button class="btn-ghost" onclick="closeAdminModal('profileVerifyOtpModal')">Cancel</button>
+        <button class="btn-primary" onclick="verifyAndSaveProfileOtp()">Verify & Update →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. AUTH MODAL (SIGN IN / REGISTER / FORGOT) -->
+  <div class="modal-backdrop" id="authModal">
+    <div class="modal-box" style="width:440px;">
+      <button class="modal-close-btn" onclick="closeAuthModal()">✕</button>
+
+      <div class="auth-tabs" id="authTabsContainer" style="display:flex; margin-bottom:1.5rem; border-bottom:1.5px solid var(--border);">
+        <button class="auth-tab-btn active" id="authTabLogin" onclick="setAuthTabMode('login')" style="flex:1; padding:10px; background:none; border:none; border-bottom:2px solid var(--primary); font-weight:700; color:var(--primary); cursor:pointer;">Sign In</button>
+        <button class="auth-tab-btn" id="authTabRegister" onclick="setAuthTabMode('register')" style="flex:1; padding:10px; background:none; border:none; border-bottom:2px solid transparent; font-weight:600; color:var(--text-muted); cursor:pointer;">Create Account</button>
+      </div>
+
+      <!-- 1. LOGIN FORM -->
+      <div id="authLoginForm">
+        <h3 style="margin-bottom:0.4rem;">Welcome back! 👋</h3>
+        <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:1.25rem;">Sign in to access your orders, saved addresses, and faster checkout.</p>
+        
+        <div class="form-group" id="group-loginEmailField">
+          <label>Email Address or Mobile Number <span style="color:var(--danger);">*</span></label>
+          <input type="text" id="loginEmailField" placeholder="e.g. name@example.com or 9876543210">
+          <div class="field-error" id="err-loginEmailField"></div>
+        </div>
+
+        <div class="form-group" id="group-loginPasswordField">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <label>Password <span style="color:var(--danger);">*</span></label>
+            <a href="javascript:void(0)" onclick="setAuthTabMode('forgot')" style="font-size:0.78rem; color:var(--primary); font-weight:600; text-decoration:none;">Forgot Password?</a>
+          </div>
+          <div class="input-with-icon">
+            <input type="password" id="loginPasswordField" placeholder="Enter your password">
+            <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('loginPasswordField', this)" title="Toggle password visibility">👁️</button>
+          </div>
+          <div class="field-error" id="err-loginPasswordField"></div>
+        </div>
+
+        <button class="btn-primary" style="width:100%; padding:12px; margin-top:0.5rem;" onclick="handleCustomerLogin()">Sign In to FoodFlow →</button>
+      </div>
+
+      <!-- 2. REGISTRATION FORM -->
+      <div id="authRegisterForm" style="display:none;">
+        <h3 style="margin-bottom:0.4rem;">Create your account 🍕</h3>
+        <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:1.25rem;">Join FoodFlow for fast ordering and exclusive discounts.</p>
+        
+        <div class="form-row">
+          <div class="form-group" id="group-regFirstName">
+            <label>First Name <span style="color:var(--danger);">*</span></label>
+            <input type="text" id="regFirstName" placeholder="Enter first name">
+            <div class="field-error" id="err-regFirstName"></div>
+          </div>
+          <div class="form-group" id="group-regLastName">
+            <label>Last Name</label>
+            <input type="text" id="regLastName" placeholder="Enter last name">
+            <div class="field-error" id="err-regLastName"></div>
+          </div>
+        </div>
+
+        <div class="form-group" id="group-regEmail">
+          <label>Email Address <span style="color:var(--danger);">*</span></label>
+          <input type="email" id="regEmail" placeholder="e.g. name@example.com">
+          <div class="field-error" id="err-regEmail"></div>
+        </div>
+
+        <div class="form-group" id="group-regPhone">
+          <label>Phone Number (10-digit Indian Mobile) <span style="color:var(--danger);">*</span></label>
+          <input type="tel" id="regPhone" placeholder="10-digit number (e.g. 9876543210)" maxlength="10">
+          <div class="field-error" id="err-regPhone"></div>
+        </div>
+
+        <div class="form-group" id="group-regPassword">
+          <label>Create Password <span style="color:var(--danger);">*</span></label>
+          <div class="input-with-icon">
+            <input type="password" id="regPassword" placeholder="Minimum 8 chars with uppercase, number & symbol">
+            <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('regPassword', this)">👁️</button>
+          </div>
+          <div class="field-error" id="err-regPassword"></div>
+        </div>
+
+        <div class="form-group" id="group-regConfirmPassword">
+          <label>Confirm Password <span style="color:var(--danger);">*</span></label>
+          <div class="input-with-icon">
+            <input type="password" id="regConfirmPassword" placeholder="Re-enter your password">
+            <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('regConfirmPassword', this)">👁️</button>
+          </div>
+          <div class="field-error" id="err-regConfirmPassword"></div>
+        </div>
+
+        <div class="form-group" id="group-regTermsCheckbox">
+          <label class="form-checkbox-label">
+            <input type="checkbox" id="regTermsCheckbox">
+            <span>I agree to the <a href="javascript:void(0)" style="color:var(--primary);">Terms of Service</a> & <a href="javascript:void(0)" style="color:var(--primary);">Privacy Policy</a></span>
+          </label>
+          <div class="field-error" id="err-regTermsCheckbox"></div>
+        </div>
+
+        <button class="btn-primary" style="width:100%; padding:12px; margin-top:0.75rem;" onclick="handleCustomerRegister()">Create FoodFlow Account →</button>
+      </div>
+
+      <!-- 3. FORGOT PASSWORD & OTP LOGIN WIZARD -->
+      <div id="authForgotForm" style="display:none;">
+        <div id="forgotStep1">
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:0.75rem;">
+            <span style="font-size:1.8rem;">🔒</span>
+            <div>
+              <h3 style="margin-bottom:2px; font-size:1.2rem;">Account Recovery</h3>
+              <p style="color:var(--text-muted); font-size:0.82rem; margin:0;">Enter your mobile number or email to receive an instant OTP.</p>
+            </div>
+          </div>
+          
+          <div class="form-group" id="group-forgotEmailField">
+            <label>Mobile Number or Email Address <span style="color:var(--danger);">*</span></label>
+            <input type="text" id="forgotEmailField" placeholder="e.g. 9876543210 or name@example.com" autocomplete="username">
+            <div class="field-error" id="err-forgotEmailField"></div>
+          </div>
+
+          <button class="btn-primary" style="width:100%; padding:13px; font-size:0.95rem; font-weight:700; margin-top:1.25rem;" onclick="handleRequestPasswordOTP()">
+            Send 6-Digit OTP Code →
+          </button>
+          
+          <p style="font-size:0.82rem; color:var(--text-muted); text-align:center; margin-top:1.25rem;">
+            Remembered your password? <a href="javascript:void(0)" onclick="setAuthTabMode('login')" style="color:var(--primary); font-weight:700;">Back to Sign In</a>
+          </p>
+        </div>
+
+        <div id="forgotStep2" style="display:none;">
+          <h3 style="margin-bottom:0.3rem; font-size:1.2rem;">Verify OTP Code 📬</h3>
+          
+          <div class="otp-destination-badge">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span>📱</span>
+              <span>Code sent to <strong id="forgotTargetEmailDisplay">user@example.com</strong></span>
+            </div>
+            <button class="edit-dest-btn" onclick="showForgotStep(1)" title="Change phone or email">✏️ Change</button>
+          </div>
+
+          <!-- Live OTP Code Banner -->
+          <div style="background:#FEF3C7; border:1px solid #FCD34D; color:#92400E; padding:8px 12px; border-radius:8px; font-size:0.85rem; margin:0.75rem 0; display:flex; justify-content:space-between; align-items:center;">
+            <div>🔑 OTP Code: <strong id="forgotOtpCodeHint" style="font-size:1.05rem; letter-spacing:2px;">123456</strong></div>
+            <button type="button" onclick="autoFillForgotOtp()" style="padding:4px 10px; font-size:0.75rem; font-weight:700; border-radius:6px; background:var(--primary); color:#fff; border:none; cursor:pointer;">Auto-fill</button>
+          </div>
+
+          <div class="otp-boxes-wrapper" id="otpBoxesWrapper">
+            <input type="text" maxlength="1" class="otp-digit-input" id="otpBox1" data-index="1" inputmode="numeric" autocomplete="one-time-code">
+            <input type="text" maxlength="1" class="otp-digit-input" id="otpBox2" data-index="2" inputmode="numeric">
+            <input type="text" maxlength="1" class="otp-digit-input" id="otpBox3" data-index="3" inputmode="numeric">
+            <input type="text" maxlength="1" class="otp-digit-input" id="otpBox4" data-index="4" inputmode="numeric">
+            <input type="text" maxlength="1" class="otp-digit-input" id="otpBox5" data-index="5" inputmode="numeric">
+            <input type="text" maxlength="1" class="otp-digit-input" id="otpBox6" data-index="6" inputmode="numeric">
+          </div>
+          <div class="field-error" id="err-forgotOtpField" style="text-align:center; margin-bottom:10px;"></div>
+
+          <button class="btn-primary" style="width:100%; padding:13px; font-size:0.95rem; font-weight:700; margin-top:0.75rem;" onclick="handleVerifyPasswordOTP()">
+            Verify Code & Reset Password →
+          </button>
+          
+          <div class="otp-timer" style="text-align:center; margin-top:1.25rem; font-size:0.82rem; color:var(--text-muted);">
+            Didn't receive code? <button class="resend-otp-btn" id="resendOtpBtn" onclick="handleRequestPasswordOTP()" style="color:var(--primary); font-weight:700; background:none; border:none; cursor:pointer;">Resend OTP</button>
+          </div>
+        </div>
+
+        <div id="forgotStep3" style="display:none;">
+          <h3 style="margin-bottom:0.3rem; font-size:1.2rem;">Set New Password 🔑</h3>
+          <p style="color:var(--text-muted); font-size:0.82rem; margin-bottom:1rem;">Choose a strong new password for your account.</p>
+          
+          <div class="form-group" id="group-forgotNewPasswordField">
+            <label>New Password <span style="color:var(--danger);">*</span></label>
+            <div class="input-with-icon">
+              <input type="password" id="forgotNewPasswordField" placeholder="Enter new password">
+              <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('forgotNewPasswordField', this)">👁️</button>
+            </div>
+            <div class="field-error" id="err-forgotNewPasswordField"></div>
+          </div>
+
+          <div class="form-group" id="group-forgotConfirmPasswordField">
+            <label>Confirm New Password <span style="color:var(--danger);">*</span></label>
+            <div class="input-with-icon">
+              <input type="password" id="forgotConfirmPasswordField" placeholder="Re-enter new password">
+              <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('forgotConfirmPasswordField', this)">👁️</button>
+            </div>
+            <div class="field-error" id="err-forgotConfirmPasswordField"></div>
+          </div>
+
+          <button class="btn-primary" style="width:100%; padding:13px; font-size:0.95rem; font-weight:700; margin-top:0.75rem;" onclick="handleSubmitNewPassword()">
+            Save New Password & Sign In →
+          </button>
+        </div>
+
+        <div id="forgotStep4" style="display:none; text-align:center; padding:1.75rem 0.5rem;">
+          <div style="font-size:3.8rem; margin-bottom:0.75rem;">🎉</div>
+          <h3 style="margin-bottom:0.4rem; font-size:1.3rem;">Password Reset Successfully!</h3>
+          <p style="color:var(--text-muted); font-size:0.88rem; margin-bottom:1.5rem;">
+            Your password has been securely updated in MySQL and you are now signed in.
+          </p>
+          <button class="btn-primary" style="width:100%; padding:12px; font-weight:700;" onclick="handleFinishPasswordReset()">
+            Continue to FoodFlow 🍕 →
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. ADD ADDRESS MODAL WITH DUPLICATE WARNING -->
+  <div class="modal-backdrop" id="addAddressModal">
+    <div class="modal-box" style="width:450px;">
+      <button class="modal-close-btn" onclick="closeAdminModal('addAddressModal')">✕</button>
+      <h3>Add New Address</h3>
+      <p style="font-size:0.82rem; color:var(--text-muted); margin-bottom:1rem;">Save home, work or other addresses for instant 1-click delivery.</p>
+      <div class="form-group">
+        <label>Address Label</label>
+        <select id="newAddrLabel">
+          <option value="Home">Home</option>
+          <option value="Office">Office / Workplace</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="form-group" id="group-newAddrText">
+        <label>Full Street Address <span style="color:var(--danger);">*</span></label>
+        <textarea id="newAddrText" placeholder="Flat / Building, Street, Landmark, City, PIN..." style="height:75px; resize:none;"></textarea>
+        <div class="field-error" id="err-newAddrText"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-ghost" onclick="closeAdminModal('addAddressModal')">Cancel</button>
+        <button class="btn-primary" onclick="submitCustomerAddress()">Save Address</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. SWIGGY / ZOMATO ENTERPRISE PAYMENT GATEWAY MODAL -->
+  <div class="modal-backdrop" id="swiggyPaymentModal">
+    <div class="modal-box pg-modal-box">
+      <div class="pg-header">
+        <div class="pg-header-title">
+          <span>🔒 Secure Payment Gateway</span>
+          <span style="font-size:0.75rem; font-weight:600; opacity:0.85; background:rgba(255,255,255,0.15); padding:2px 8px; border-radius:12px;">PCI-DSS & RBI Compliant</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:12px;">
+          <span class="pg-amount-tag" id="pgModalTotalAmount">₹0</span>
+          <button class="modal-close-btn" style="position:static; color:#fff;" onclick="closeAdminModal('swiggyPaymentModal')">✕</button>
+        </div>
+      </div>
+      
+      <div class="pg-body" style="position:relative;">
+        <!-- Processing & Animation Overlay -->
+        <div class="pg-processing-overlay" id="pgProcessingOverlay" style="display:none;">
+          <div class="pg-spinner"></div>
+          <h3 id="pgProcessingTitle" style="font-size:1.15rem; margin-bottom:6px;">Connecting to Payment Gateway...</h3>
+          <p id="pgProcessingDesc" style="font-size:0.85rem; color:var(--text-muted);">Please do not refresh or close this window.</p>
+        </div>
+
+        <!-- Left Tabs Navigation -->
+        <div class="pg-sidebar">
+          <button class="pg-tab-btn active" onclick="switchPaymentTab('upi', this)">
+            <span>📱</span> UPI & QR Code
+          </button>
+          <button class="pg-tab-btn" onclick="switchPaymentTab('card', this)">
+            <span>💳</span> Credit / Debit Cards
+          </button>
+          <button class="pg-tab-btn" onclick="switchPaymentTab('netbanking', this)">
+            <span>🏦</span> Net Banking
+          </button>
+          <button class="pg-tab-btn" onclick="switchPaymentTab('wallets', this)">
+            <span>👛</span> Wallets
+          </button>
+          <button class="pg-tab-btn" onclick="switchPaymentTab('cod', this)">
+            <span>💵</span> Cash on Delivery
+          </button>
+        </div>
+
+        <!-- Right Content Panels -->
+        <div class="pg-content">
+          
+          <!-- TAB 1: UPI & QR CODE (SWIGGY/ZOMATO END-TO-END) -->
+          <div class="pg-tab-pane active" id="pg-tab-upi">
+            
+            <!-- Default View: Instant Apps & Add UPI ID -->
+            <div id="upiDefaultPanel">
+              <h4 style="font-size:0.95rem; margin-bottom:0.75rem;">Fastest Payment via UPI</h4>
+              
+              <div class="upi-app-grid">
+                <div class="upi-app-card" onclick="selectUpiApp('Google Pay')">
+                  <div class="upi-app-icon" style="color:#4285F4; font-weight:800;">G</div>
+                  <div><div style="font-weight:700; font-size:0.9rem;">Google Pay</div><div style="font-size:0.72rem; color:var(--text-muted);">Instant UPI Intent</div></div>
+                </div>
+                <div class="upi-app-card" onclick="selectUpiApp('PhonePe')">
+                  <div class="upi-app-icon" style="color:#5F259F; font-weight:800;">Pe</div>
+                  <div><div style="font-weight:700; font-size:0.9rem;">PhonePe</div><div style="font-size:0.72rem; color:var(--text-muted);">UPI / Wallet</div></div>
+                </div>
+                <div class="upi-app-card" onclick="selectUpiApp('Paytm UPI')">
+                  <div class="upi-app-icon" style="color:#00BAF2; font-weight:800;">P</div>
+                  <div><div style="font-weight:700; font-size:0.9rem;">Paytm UPI</div><div style="font-size:0.72rem; color:var(--text-muted);">Instant zero-fee</div></div>
+                </div>
+                <div class="upi-app-card" onclick="selectUpiApp('CRED UPI')">
+                  <div class="upi-app-icon" style="color:#111; font-weight:800;">C</div>
+                  <div><div style="font-weight:700; font-size:0.9rem;">CRED UPI</div><div style="font-size:0.72rem; color:var(--text-muted);">Earn cashback</div></div>
+                </div>
+              </div>
+
+              <!-- Mandatory UPI ID Verification Section (Swiggy / Zomato Pattern) -->
+              <div class="upi-verify-box">
+                <label style="font-size:0.85rem; font-weight:700; color:var(--text); display:block; margin-bottom:6px;">
+                  Add New UPI ID / VPA <span style="font-size:0.75rem; color:var(--text-muted); font-weight:normal;">(Verified via NPCI)</span>
+                </label>
+                
+                <div style="display:flex; gap:8px;">
+                  <input type="text" id="pgUpiIdInput" placeholder="e.g. 9876543210@upi or name@okhdfcbank" oninput="handleUpiIdChanged()" style="flex:1; padding:10px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.92rem;">
+                  <button class="btn-primary" id="btnVerifyUpi" onclick="verifyCustomUpiId()" style="padding:10px 18px; font-size:0.88rem; font-weight:700; white-space:nowrap;">
+                    Verify UPI ID
+                  </button>
+                </div>
+                
+                <div class="field-error" id="err-pgUpiId" style="margin-top:5px; font-size:0.8rem;"></div>
+
+                <!-- Quick VPA Suffix Pills -->
+                <div class="upi-quick-pills">
+                  <span class="upi-pill" onclick="appendUpiHandle('@okhdfcbank')">@okhdfcbank</span>
+                  <span class="upi-pill" onclick="appendUpiHandle('@okaxis')">@okaxis</span>
+                  <span class="upi-pill" onclick="appendUpiHandle('@okicici')">@okicici</span>
+                  <span class="upi-pill" onclick="appendUpiHandle('@oksbi')">@oksbi</span>
+                  <span class="upi-pill" onclick="appendUpiHandle('@ybl')">@ybl</span>
+                  <span class="upi-pill" onclick="appendUpiHandle('@paytm')">@paytm</span>
+                  <span class="upi-pill" onclick="appendUpiHandle('@upi')">@upi</span>
+                </div>
+
+                <!-- Verification Result & Pay Button (Activated only after valid verification) -->
+                <div id="upiVerifiedSection" style="display:none;">
+                  <div class="upi-verified-badge" id="upiVerifiedBadge">
+                    <span>✓</span> <span id="upiVerifiedText">Verified Name: Customer Name (Bank of India / HDFC)</span>
+                  </div>
+                  <button class="place-order-btn" id="btnPayVerifiedUpi" onclick="submitVerifiedUpiPay()" style="margin-top:12px; padding:12px;">
+                    Pay ₹<span id="upiPayAmountDisplay">0</span> via Verified UPI →
+                  </button>
+                </div>
+              </div>
+
+              <!-- Scan QR Code (On-demand trigger & 5-minute timer) -->
+              <div class="qr-trigger-card" id="pgQrTriggerCard" style="background:#F8FAFC; border:1.5px dashed var(--primary); border-radius:12px; padding:1.15rem; text-align:center; margin-top:1rem; cursor:pointer;" onclick="showQrPaymentSection()">
+                <div style="font-size:1.8rem; margin-bottom:4px;">📷</div>
+                <div style="font-weight:700; font-size:0.92rem; color:var(--text);">Scan & Pay with any UPI App</div>
+                <div style="font-size:0.78rem; color:var(--text-muted); margin-top:2px;">Scan using Google Pay, PhonePe, Paytm, CRED or BHIM</div>
+                <button type="button" class="btn-primary" style="margin-top:8px; padding:7px 18px; font-size:0.82rem; font-weight:700; border-radius:8px;">Show QR Code to Pay →</button>
+              </div>
+
+              <div class="qr-box" id="pgQrActiveSection" style="display:none;">
+                <div style="display:flex; justify-content:space-between; align-items:center; width:100%; margin-bottom:6px;">
+                  <span style="font-weight:700; font-size:0.85rem; color:var(--text);">Scan to Pay</span>
+                  <button type="button" class="action-btn" onclick="hideQrPaymentSection()" style="font-size:0.75rem; padding:2px 8px;">✕ Hide QR</button>
+                </div>
+                <div class="qr-image-sim">
+                  <svg width="110" height="110" viewBox="0 0 100 100">
+                    <rect width="100" height="100" fill="#fff"/>
+                    <path d="M10,10 h30 v30 h-30 z M15,15 v20 h20 v-20 z M20,20 h10 v10 h-10 z" fill="#1A1A2E"/>
+                    <path d="M60,10 h30 v30 h-30 z M65,15 v20 h20 v-20 z M70,20 h10 v10 h-10 z" fill="#1A1A2E"/>
+                    <path d="M10,60 h30 v30 h-30 z M15,65 v20 h20 v-20 z M20,70 h10 v10 h-10 z" fill="#1A1A2E"/>
+                    <rect x="45" y="10" width="8" height="25" fill="#1A1A2E"/>
+                    <rect x="45" y="45" width="18" height="18" fill="#E85D2F"/>
+                    <rect x="70" y="45" width="20" height="10" fill="#1A1A2E"/>
+                    <rect x="45" y="70" width="10" height="20" fill="#1A1A2E"/>
+                    <rect x="65" y="65" width="25" height="25" fill="#1A1A2E"/>
+                  </svg>
+                </div>
+                <div style="font-weight:700; font-size:0.85rem; margin-top:4px;">Scan & Pay with any UPI App</div>
+                <div style="font-size:0.78rem; color:var(--text-muted); margin-top:2px;">QR expires in <strong id="pgQrTimer" style="color:var(--primary); font-size:0.92rem;">05:00</strong></div>
+                <button type="button" class="action-btn success" style="margin-top:8px; font-size:0.82rem; font-weight:700;" onclick="simulateQrPaymentDone()">✓ I've scanned & paid on phone</button>
+              </div>
+            </div>
+
+            <!-- Swiggy/Zomato UPI Collect Request Screen (Triggered when user pays via UPI) -->
+            <div id="upiCollectScreen" style="display:none;" class="upi-collect-screen">
+              <div class="upi-collect-phone-icon">📱</div>
+              <h3 style="font-size:1.25rem; font-weight:800; margin-bottom:4px;">Payment Request Sent!</h3>
+              <p style="font-size:0.88rem; color:var(--text-muted); margin:0;">
+                We have sent a collect request of <strong id="upiCollectAmountDisplay">₹0</strong> to <strong id="upiCollectTargetDisplay">user@upi</strong>.
+              </p>
+              
+              <div style="background:var(--surface2); padding:1rem; border-radius:10px; margin:1.25rem 0; border:1px solid var(--border); font-size:0.85rem; line-height:1.45;">
+                👉 Open your UPI mobile app (Google Pay / PhonePe / Paytm / BHIM), check notifications, and enter your UPI PIN to approve.
+              </div>
+
+              <div style="font-size:0.8rem; color:var(--text-muted);">Request expires in:</div>
+              <div class="upi-countdown-timer" id="upiCollectTimer">04:59</div>
+
+              <div style="display:flex; gap:10px; justify-content:center;">
+                <button class="btn-ghost" onclick="cancelUpiCollectScreen()" style="padding:10px 18px;">Cancel Request</button>
+                <button class="btn-primary" onclick="confirmUpiCollectSuccess()" style="padding:10px 24px;">✓ Approve on UPI App (Simulate)</button>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- TAB 2: CREDIT / DEBIT CARDS -->
+          <div class="pg-tab-pane" id="pg-tab-card">
+            <div class="card-visual-mock">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div class="card-visual-chip"></div>
+                <span id="cardNetworkIcon" style="font-weight:800; font-size:1.1rem; letter-spacing:1px;">VISA</span>
+              </div>
+              <div class="card-visual-num" id="cardMockNumber">•••• •••• •••• 4242</div>
+              <div class="card-visual-footer">
+                <span id="cardMockName">CARDHOLDER NAME</span>
+                <span id="cardMockExp">MM/YY</span>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Card Number</label>
+              <input type="text" id="pgCardNumber" placeholder="4532 0123 4567 8901" maxlength="19" oninput="handleCardNumberInput(this)">
+            </div>
+            <div class="form-group">
+              <label>Name on Card</label>
+              <input type="text" id="pgCardHolder" placeholder="Cardholder name" oninput="handleCardNameInput(this)">
+            </div>
+            <div class="form-row">
+              <div class="form-group"><label>Expiry (MM/YY)</label><input type="text" id="pgCardExp" placeholder="12/28" maxlength="5" oninput="handleCardExpInput(this)"></div>
+              <div class="form-group"><label>CVV / CVC</label><input type="password" id="pgCardCvv" placeholder="•••" maxlength="4"></div>
+            </div>
+            <button class="place-order-btn" style="margin-top:0;" onclick="submitCardPayment()">Proceed to Bank 3D Secure Verification →</button>
+          </div>
+
+          <!-- TAB 3: NET BANKING -->
+          <div class="pg-tab-pane" id="pg-tab-netbanking">
+            <h4 style="font-size:0.92rem; margin-bottom:0.75rem;">Select Popular Bank</h4>
+            <div class="bank-grid">
+              <div class="bank-card selected" onclick="selectBank('HDFC Bank', this)">🏦 HDFC Bank</div>
+              <div class="bank-card" onclick="selectBank('ICICI Bank', this)">🏦 ICICI Bank</div>
+              <div class="bank-card" onclick="selectBank('State Bank of India (SBI)', this)">🏦 SBI</div>
+              <div class="bank-card" onclick="selectBank('Axis Bank', this)">🏦 Axis Bank</div>
+              <div class="bank-card" onclick="selectBank('Kotak Mahindra Bank', this)">🏦 Kotak Bank</div>
+              <div class="bank-card" onclick="selectBank('Punjab National Bank', this)">🏦 PNB</div>
+            </div>
+
+            <div class="form-group" style="margin-top:1rem;">
+              <label>Or Select Other Indian Bank</label>
+              <select id="pgAllBanksSelect" onchange="selectBank(this.value, null)">
+                <option value="HDFC Bank">HDFC Bank</option>
+                <option value="ICICI Bank">ICICI Bank</option>
+                <option value="State Bank of India (SBI)">State Bank of India (SBI)</option>
+                <option value="Axis Bank">Axis Bank</option>
+                <option value="Kotak Mahindra Bank">Kotak Mahindra Bank</option>
+                <option value="Bank of Baroda">Bank of Baroda</option>
+                <option value="Canara Bank">Canara Bank</option>
+                <option value="Union Bank of India">Union Bank of India</option>
+                <option value="IndusInd Bank">IndusInd Bank</option>
+                <option value="Federal Bank">Federal Bank</option>
+                <option value="IDFC FIRST Bank">IDFC FIRST Bank</option>
+                <option value="Yes Bank">Yes Bank</option>
+              </select>
+            </div>
+
+            <button class="place-order-btn" style="margin-top:1rem;" onclick="submitNetBankingPayment()">Pay via Net Banking →</button>
+          </div>
+
+          <!-- TAB 4: WALLETS -->
+          <div class="pg-tab-pane" id="pg-tab-wallets">
+            <div id="pgWalletsList" style="display:flex; flex-direction:column; gap:12px;"></div>
+          </div>
+
+          <!-- TAB 5: CASH ON DELIVERY -->
+          <div class="pg-tab-pane" id="pg-tab-cod">
+            <div style="background:var(--surface2); padding:1.25rem; border-radius:10px; border:1px solid var(--border); margin-bottom:1.5rem;">
+              <div style="font-size:1.8rem; margin-bottom:6px;">💵</div>
+              <h4 style="margin-bottom:4px;">Cash / UPI on Delivery</h4>
+              <p style="font-size:0.84rem; color:var(--text-muted); line-height:1.4;">
+                You can pay using cash or ask the delivery partner to show their personal QR code upon delivery at your doorstep.
+              </p>
+            </div>
+            <button class="place-order-btn" style="background:#1A1A2E;" onclick="submitCodPayment()">Confirm Cash on Delivery Order →</button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. BANK 3D SECURE OTP VERIFICATION MODAL -->
+  <div class="modal-backdrop" id="cardOtpModal">
+    <div class="modal-box" style="width:420px; text-align:center;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; border-bottom:1px solid var(--border); padding-bottom:0.75rem;">
+        <span style="font-weight:800; color:var(--primary); font-size:1.1rem;">🏛️ Verified by VISA / RuPay</span>
+        <span id="otpAmountTag" style="font-weight:700; font-size:0.95rem;">₹0</span>
+      </div>
+      <p style="font-size:0.86rem; color:var(--text-muted); margin-bottom:1rem;">
+        An OTP has been sent to your registered mobile number ending in <strong>+91 98****3210</strong>.
+      </p>
+      <div class="form-group" style="max-width:240px; margin:0 auto 1.5rem;">
+        <input type="text" id="bankOtpInput" placeholder="1 2 3 4 5 6" maxlength="6" style="text-align:center; font-size:1.4rem; letter-spacing:6px; font-weight:800;">
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button class="btn-ghost" style="flex:1;" onclick="closeAdminModal('cardOtpModal')">Cancel</button>
+        <button class="btn-primary" style="flex:1;" onclick="verifyBankOtpAndComplete()">Authorize Payment →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. CUSTOMER ORDER CANCELLATION & REFUND MODAL -->
+  <div class="modal-backdrop" id="customerCancelOrderModal">
+    <div class="modal-box" style="width:460px;">
+      <button class="modal-close-btn" onclick="closeAdminModal('customerCancelOrderModal')">✕</button>
+      <h3 style="color:var(--danger); display:flex; align-items:center; gap:8px;">
+        <span>✕</span> Cancel Order & Refund
+      </h3>
+      <div style="background:var(--surface2); padding:1rem; border-radius:8px; margin:1rem 0; font-size:0.86rem;">
+        <div><strong>Order ID:</strong> <span id="cancelModalOrderId">#ORD-XXXX</span></div>
+        <div><strong>Amount:</strong> <span id="cancelModalAmount">₹0</span></div>
+        <div><strong>Payment:</strong> <span id="cancelModalPayment">UPI</span></div>
+      </div>
+      
+      <div id="cancelModalRefundNotice"></div>
+
+      <div class="form-group" style="margin-top:1rem;">
+        <label>Reason for Cancellation <span style="color:var(--danger);">*</span></label>
+        <select id="custCancelReasonSelect">
+          <option value="Ordered by mistake">Ordered by mistake</option>
+          <option value="Delivery time is taking too long">Delivery time is taking too long</option>
+          <option value="Want to change delivery address / phone">Want to change delivery address / phone</option>
+          <option value="Want to change items in order">Want to change items in order</option>
+          <option value="Forgot to apply coupon code">Forgot to apply coupon code</option>
+          <option value="Other reason">Other reason</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Additional Notes (Optional)</label>
+        <textarea id="custCancelNotes" placeholder="Provide any additional comments..." style="height:55px; resize:none;"></textarea>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-ghost" onclick="closeAdminModal('customerCancelOrderModal')">Keep Order</button>
+        <button class="action-btn danger" style="padding:10px 20px;" onclick="confirmCustomerOrderCancellation()">Confirm Cancellation</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 8. SWIGGY / AMAZON PAY STYLE WALLET TOP-UP PAYMENT MODAL -->
+  <div class="modal-backdrop" id="walletTopUpModal">
+    <div class="modal-box pg-modal-box">
+      <div class="pg-header">
+        <div class="pg-header-title">
+          <span>⚡ Add Money to FoodFlow Wallet</span>
+          <span style="font-size:0.75rem; font-weight:600; opacity:0.85; background:rgba(255,255,255,0.15); padding:2px 8px; border-radius:12px;">PCI-DSS & RBI Compliant</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:12px;">
+          <span class="pg-amount-tag" id="topUpModalAmountDisplay">₹0</span>
+          <button class="modal-close-btn" style="position:static; color:#fff;" onclick="closeAdminModal('walletTopUpModal')">✕</button>
+        </div>
+      </div>
+      
+      <div class="pg-body" style="position:relative;">
+        <!-- Processing Overlay -->
+        <div class="pg-processing-overlay" id="topUpProcessingOverlay" style="display:none;">
+          <div class="pg-spinner"></div>
+          <h3 id="topUpProcessingTitle" style="font-size:1.15rem; margin-bottom:6px;">Authorizing Wallet Recharge...</h3>
+          <p id="topUpProcessingDesc" style="font-size:0.85rem; color:var(--text-muted);">Secure connection with bank gateway</p>
+        </div>
+
+        <!-- Left Sidebar Navigation -->
+        <div class="pg-sidebar">
+          <button class="pg-tab-btn active" onclick="switchTopUpPaymentTab('upi', this)">
+            <span>📱</span> UPI & QR Code
+          </button>
+          <button class="pg-tab-btn" onclick="switchTopUpPaymentTab('card', this)">
+            <span>💳</span> Credit / Debit Cards
+          </button>
+          <button class="pg-tab-btn" onclick="switchTopUpPaymentTab('netbanking', this)">
+            <span>🏦</span> Net Banking
+          </button>
+        </div>
+
+        <!-- Right Content Panels -->
+        <div class="pg-content">
+          
+          <!-- TAB 1: UPI & QR CODE FOR TOPUP -->
+          <div class="pg-tab-pane active" id="topup-tab-upi">
+            <div id="topUpUpiDefaultPanel">
+              <h4 style="font-size:0.95rem; margin-bottom:0.75rem;">Fastest Recharge via UPI</h4>
+              
+              <div class="upi-app-grid">
+                <div class="upi-app-card" onclick="selectTopUpUpiApp('Google Pay')">
+                  <div class="upi-app-icon" style="color:#4285F4; font-weight:800;">G</div>
+                  <div><div style="font-weight:700; font-size:0.9rem;">Google Pay</div><div style="font-size:0.72rem; color:var(--text-muted);">Instant Top-Up</div></div>
+                </div>
+                <div class="upi-app-card" onclick="selectTopUpUpiApp('PhonePe')">
+                  <div class="upi-app-icon" style="color:#5F259F; font-weight:800;">Pe</div>
+                  <div><div style="font-weight:700; font-size:0.9rem;">PhonePe</div><div style="font-size:0.72rem; color:var(--text-muted);">Instant Top-Up</div></div>
+                </div>
+                <div class="upi-app-card" onclick="selectTopUpUpiApp('Paytm UPI')">
+                  <div class="upi-app-icon" style="color:#00BAF2; font-weight:800;">P</div>
+                  <div><div style="font-weight:700; font-size:0.9rem;">Paytm UPI</div><div style="font-size:0.72rem; color:var(--text-muted);">Zero-fee recharge</div></div>
+                </div>
+                <div class="upi-app-card" onclick="selectTopUpUpiApp('CRED UPI')">
+                  <div class="upi-app-icon" style="color:#111; font-weight:800;">C</div>
+                  <div><div style="font-weight:700; font-size:0.9rem;">CRED UPI</div><div style="font-size:0.72rem; color:var(--text-muted);">Earn cashback</div></div>
+                </div>
+              </div>
+
+              <!-- NPCI VPA Verification -->
+              <div class="upi-verify-box">
+                <label style="font-size:0.85rem; font-weight:700; color:var(--text); display:block; margin-bottom:6px;">
+                  Enter UPI ID / VPA <span style="font-size:0.75rem; color:var(--text-muted); font-weight:normal;">(Verified via NPCI)</span>
+                </label>
+                <div style="display:flex; gap:8px;">
+                  <input type="text" id="topUpUpiIdInput" placeholder="e.g. 9876543210@upi or name@okhdfcbank" oninput="handleTopUpUpiIdChanged()" style="flex:1; padding:10px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.92rem;">
+                  <button class="btn-primary" id="btnVerifyTopUpUpi" onclick="verifyTopUpCustomUpiId()" style="padding:10px 18px; font-size:0.88rem; font-weight:700; white-space:nowrap;">
+                    Verify UPI ID
+                  </button>
+                </div>
+                <div class="field-error" id="err-topUpUpiId" style="margin-top:5px; font-size:0.8rem;"></div>
+
+                <div class="upi-quick-pills">
+                  <span class="upi-pill" onclick="appendTopUpUpiHandle('@okhdfcbank')">@okhdfcbank</span>
+                  <span class="upi-pill" onclick="appendTopUpUpiHandle('@okaxis')">@okaxis</span>
+                  <span class="upi-pill" onclick="appendTopUpUpiHandle('@okicici')">@okicici</span>
+                  <span class="upi-pill" onclick="appendTopUpUpiHandle('@oksbi')">@oksbi</span>
+                  <span class="upi-pill" onclick="appendTopUpUpiHandle('@ybl')">@ybl</span>
+                  <span class="upi-pill" onclick="appendTopUpUpiHandle('@paytm')">@paytm</span>
+                </div>
+
+                <div id="topUpUpiVerifiedSection" style="display:none;">
+                  <div class="upi-verified-badge" id="topUpUpiVerifiedBadge">
+                    <span>✓</span> <span id="topUpUpiVerifiedText">Verified Account: Customer Name (NPCI Verified)</span>
+                  </div>
+                  <button class="place-order-btn" id="btnPayVerifiedTopUpUpi" onclick="submitTopUpVerifiedUpiPay()" style="margin-top:12px; padding:12px;">
+                    Recharge Wallet via Verified UPI →
+                  </button>
+                </div>
+              </div>
+
+              <!-- Top-Up QR Trigger Card (Hidden on demand, 5-minute timer) -->
+              <div class="qr-trigger-card" id="topUpQrTriggerCard" style="background:#F8FAFC; border:1.5px dashed var(--primary); border-radius:12px; padding:1.15rem; text-align:center; margin-top:1rem; cursor:pointer;" onclick="showTopUpQrPaymentSection()">
+                <div style="font-size:1.8rem; margin-bottom:4px;">📷</div>
+                <div style="font-weight:700; font-size:0.92rem; color:var(--text);">Scan & Recharge with any UPI App</div>
+                <div style="font-size:0.78rem; color:var(--text-muted); margin-top:2px;">Scan using Google Pay, PhonePe, Paytm, CRED or BHIM</div>
+                <button type="button" class="btn-primary" style="margin-top:8px; padding:7px 18px; font-size:0.82rem; font-weight:700; border-radius:8px;">Show QR Code to Recharge →</button>
+              </div>
+
+              <!-- Active Top-Up QR Section -->
+              <div class="qr-box" id="topUpQrActiveSection" style="display:none;">
+                <div style="display:flex; justify-content:space-between; align-items:center; width:100%; margin-bottom:6px;">
+                  <span style="font-weight:700; font-size:0.85rem; color:var(--text);">Scan to Recharge Wallet</span>
+                  <button type="button" class="action-btn" onclick="hideTopUpQrPaymentSection()" style="font-size:0.75rem; padding:2px 8px;">✕ Hide QR</button>
+                </div>
+                <div class="qr-image-sim">
+                  <svg width="110" height="110" viewBox="0 0 100 100">
+                    <rect width="100" height="100" fill="#fff"/>
+                    <path d="M10,10 h30 v30 h-30 z M15,15 v20 h20 v-20 z M20,20 h10 v10 h-10 z" fill="#1A1A2E"/>
+                    <path d="M60,10 h30 v30 h-30 z M65,15 v20 h20 v-20 z M70,20 h10 v10 h-10 z" fill="#1A1A2E"/>
+                    <path d="M10,60 h30 v30 h-30 z M15,65 v20 h20 v-20 z M20,70 h10 v10 h-10 z" fill="#1A1A2E"/>
+                    <rect x="45" y="10" width="8" height="25" fill="#1A1A2E"/>
+                    <rect x="45" y="45" width="18" height="18" fill="#E85D2F"/>
+                    <rect x="70" y="45" width="20" height="10" fill="#1A1A2E"/>
+                    <rect x="45" y="70" width="10" height="20" fill="#1A1A2E"/>
+                    <rect x="65" y="65" width="25" height="25" fill="#1A1A2E"/>
+                  </svg>
+                </div>
+                <div style="font-weight:700; font-size:0.85rem; margin-top:4px;">Scan & Recharge with any UPI App</div>
+                <div style="font-size:0.78rem; color:var(--text-muted); margin-top:2px;">QR expires in <strong id="topUpQrTimer" style="color:var(--primary); font-size:0.92rem;">05:00</strong></div>
+                <button type="button" class="action-btn success" style="margin-top:8px; font-size:0.82rem; font-weight:700;" onclick="simulateTopUpQrPaymentDone()">✓ I've scanned & recharged on phone</button>
+              </div>
+            </div>
+
+            <!-- TopUp Collect Screen -->
+            <div id="topUpUpiCollectScreen" style="display:none;" class="upi-collect-screen">
+              <div class="upi-collect-phone-icon">📱</div>
+              <h3 style="font-size:1.25rem; font-weight:800; margin-bottom:4px;">Recharge Request Sent!</h3>
+              <p style="font-size:0.88rem; color:var(--text-muted); margin:0;">
+                We have sent a collect request of <strong id="topUpUpiCollectAmountDisplay">₹0</strong> to <strong id="topUpUpiCollectTargetDisplay">user@upi</strong>.
+              </p>
+              <div class="upi-countdown-timer" id="topUpUpiCollectCountdown">04:59</div>
+              <p style="font-size:0.82rem; color:var(--text-muted); margin-bottom:1.25rem;">
+                Open your UPI mobile app and approve the recharge request before timer expires.
+              </p>
+              <div style="display:flex; gap:10px; justify-content:center;">
+                <button class="btn-ghost" onclick="cancelTopUpUpiCollectScreen()">Cancel Request</button>
+                <button class="action-btn success" onclick="confirmTopUpUpiCollectSuccess()">✓ I've Approved on App</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 2: CREDIT / DEBIT CARDS FOR TOPUP -->
+          <div class="pg-tab-pane" id="topup-tab-card">
+            <h4 style="font-size:0.92rem; margin-bottom:0.75rem;">Enter Card Details for Recharge</h4>
+            <div class="form-group">
+              <label>Card Number</label>
+              <input type="text" id="topUpCardNumber" placeholder="4532 •••• •••• 8892" maxlength="19" oninput="handleCardNumberInput(this)">
+            </div>
+            <div class="form-group">
+              <label>Cardholder Name</label>
+              <input type="text" id="topUpCardHolder" placeholder="Name as on card">
+            </div>
+            <div class="form-row">
+              <div class="form-group"><label>Expiry (MM/YY)</label><input type="text" id="topUpCardExp" placeholder="12/28" maxlength="5" oninput="handleCardExpInput(this)"></div>
+              <div class="form-group"><label>CVV / CVC</label><input type="password" id="topUpCardCvv" placeholder="•••" maxlength="4"></div>
+            </div>
+            <button class="place-order-btn" style="margin-top:0;" onclick="submitTopUpCardPayment()">Proceed to Bank 3D Secure Verification →</button>
+          </div>
+
+          <!-- TAB 3: NET BANKING FOR TOPUP -->
+          <div class="pg-tab-pane" id="topup-tab-netbanking">
+            <h4 style="font-size:0.92rem; margin-bottom:0.75rem;">Select Popular Bank</h4>
+            <div class="bank-grid">
+              <div class="bank-card selected" onclick="selectTopUpBank('HDFC Bank', this)">🏦 HDFC Bank</div>
+              <div class="bank-card" onclick="selectTopUpBank('ICICI Bank', this)">🏦 ICICI Bank</div>
+              <div class="bank-card" onclick="selectTopUpBank('State Bank of India (SBI)', this)">🏦 SBI</div>
+              <div class="bank-card" onclick="selectTopUpBank('Axis Bank', this)">🏦 Axis Bank</div>
+              <div class="bank-card" onclick="selectTopUpBank('Kotak Mahindra Bank', this)">🏦 Kotak Bank</div>
+              <div class="bank-card" onclick="selectTopUpBank('Punjab National Bank', this)">🏦 PNB</div>
+            </div>
+            <div class="form-group" style="margin-top:1rem;">
+              <label>Or Select Other Indian Bank</label>
+              <select id="topUpAllBanksSelect" onchange="selectTopUpBank(this.value, null)">
+                <option value="HDFC Bank">HDFC Bank</option>
+                <option value="ICICI Bank">ICICI Bank</option>
+                <option value="State Bank of India (SBI)">State Bank of India (SBI)</option>
+                <option value="Axis Bank">Axis Bank</option>
+                <option value="Kotak Mahindra Bank">Kotak Mahindra Bank</option>
+                <option value="Bank of Baroda">Bank of Baroda</option>
+                <option value="Canara Bank">Canara Bank</option>
+                <option value="Union Bank of India">Union Bank of India</option>
+                <option value="IndusInd Bank">IndusInd Bank</option>
+              </select>
+            </div>
+            <button class="place-order-btn" style="margin-top:1rem;" onclick="submitTopUpNetBankingPayment()">Recharge via Net Banking →</button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 9. TOP-UP BANK 3D SECURE OTP VERIFICATION MODAL -->
+  <div class="modal-backdrop" id="topUpCardOtpModal">
+    <div class="modal-box" style="width:420px; text-align:center;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; border-bottom:1px solid var(--border); padding-bottom:0.75rem;">
+        <span style="font-weight:800; color:var(--primary); font-size:1.1rem;">🏛️ Verified by VISA / RuPay</span>
+        <span id="topUpOtpAmountTag" style="font-weight:700; font-size:0.95rem;">₹0</span>
+      </div>
+      <p style="font-size:0.86rem; color:var(--text-muted); margin-bottom:1rem;">
+        An OTP has been sent to your registered mobile number ending in <strong>+91 98****3210</strong> to authorize wallet recharge.
+      </p>
+      <div class="form-group" style="max-width:240px; margin:0 auto 1.5rem;">
+        <input type="text" id="topUpBankOtpInput" placeholder="1 2 3 4 5 6" maxlength="6" style="text-align:center; font-size:1.4rem; letter-spacing:6px; font-weight:800;">
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button class="btn-ghost" style="flex:1;" onclick="closeAdminModal('topUpCardOtpModal')">Cancel</button>
+        <button class="btn-primary" style="flex:1;" onclick="verifyTopUpBankOtpAndComplete()">Authorize Recharge →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 10. RECEIPT MODAL -->
+  <div class="modal-backdrop" id="receiptModal">
+    <div class="modal-box" style="width:480px;">
+      <button class="modal-close-btn" onclick="closeAdminModal('receiptModal')">✕</button>
+      <div id="receiptModalContent"></div>
+      <div class="modal-actions">
+        <button class="btn-ghost" onclick="closeAdminModal('receiptModal')">Close</button>
+        <button class="btn-primary" onclick="window.print()">🖨️ Print Invoice</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div class="toast" id="globalToast"></div>
+
+  <!-- FOOTER -->
+  <footer class="global-footer">
+    <strong>FoodFlow</strong> — Delicious Food Delivered Fast<br>
+    <span style="font-size:0.78rem; margin-top:4px; display:block;">
+      © 2026 FoodFlow Technologies Inc. All rights reserved. · Safe & Secure Checkout · Fresh Quality Guaranteed
+    </span>
+  </footer>
+
+  <!-- SCRIPTS -->
+  <script src="store.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

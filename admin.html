@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FoodFlow – Enterprise Admin Management Panel</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Top Switcher -->
+  <header class="global-switcher-bar">
+    <div class="switcher-left">
+      <span class="brand-badge">FoodFlow Admin Panel</span>
+      <a href="customer.html" class="switcher-tab">🛍️ Customer Portal</a>
+      <a href="test-suite.html" class="switcher-tab">🧪 Test Suite (31 Tests)</a>
+    </div>
+    <div class="switcher-right">
+      <div class="db-status-badge" id="topDbStatusBadge" onclick="handleRetestMysqlConnection()" style="cursor:pointer;" title="Click to test MySQL connection">
+        <span class="live-dot" id="topDbStatusDot"></span> <span id="topDbStatusText">MySQL Database</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="admin-wrapper">
+    <!-- ADMIN SIDEBAR -->
+    <aside class="admin-sidebar">
+      <div class="admin-sidebar-logo">
+        <span class="logo-icon">🍕</span>
+        <span class="logo-text">Food<span>Flow</span></span>
+        <span class="admin-badge">ADMIN</span>
+      </div>
+
+      <div class="admin-section-label">Overview</div>
+      <button class="admin-nav-item active" onclick="showAdminPage('dashboard', this)">
+        <span class="nav-icon">📊</span> <span>Dashboard</span>
+      </button>
+
+      <div class="admin-section-label">Management</div>
+      <button class="admin-nav-item" onclick="showAdminPage('orders', this)">
+        <span class="nav-icon">📋</span> <span>Orders</span>
+        <span class="admin-nav-badge" id="adminPendingOrdersBadge">0</span>
+      </button>
+      <button class="admin-nav-item" onclick="showAdminPage('users', this)">
+        <span class="nav-icon">👥</span> <span>Users</span>
+      </button>
+      <button class="admin-nav-item" onclick="showAdminPage('restaurants', this)">
+        <span class="nav-icon">🏪</span> <span>Restaurants</span>
+      </button>
+      <button class="admin-nav-item" onclick="showAdminPage('menu', this)">
+        <span class="nav-icon">🍽️</span> <span>Menu Items</span>
+      </button>
+
+      <div class="admin-section-label">Finance</div>
+      <button class="admin-nav-item" onclick="showAdminPage('payments', this)">
+        <span class="nav-icon">💳</span> <span>Payments</span>
+      </button>
+
+      <div class="admin-section-label">Platform</div>
+      <button class="admin-nav-item" onclick="showAdminPage('settings', this)">
+        <span class="nav-icon">⚙️</span> <span>Settings & Promos</span>
+      </button>
+
+      <div class="admin-sidebar-footer">
+        <div class="admin-profile">
+          <div class="admin-avatar">SA</div>
+          <div>
+            <div class="admin-name">Super Admin</div>
+            <div class="admin-role">admin@foodflow.com</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN BODY -->
+    <main class="admin-main">
+      <header class="admin-topbar">
+        <div class="admin-topbar-left">
+          <span class="admin-topbar-title" id="adminTopbarTitle">Dashboard Overview</span>
+          <span class="admin-topbar-sub" id="adminTopbarSub">Real-time sales, order volume and analytics</span>
+        </div>
+      </header>
+
+      <!-- DASHBOARD -->
+      <div class="admin-page active" id="admin-page-dashboard">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div>
+              <div class="stat-label">Total Orders</div>
+              <div class="stat-value" id="admStatOrders">0</div>
+              <div class="stat-change stat-up">Live tracking active</div>
+            </div>
+            <div class="stat-icon" style="background:#FFF0EB;">📋</div>
+          </div>
+          <div class="stat-card">
+            <div>
+              <div class="stat-label">Gross Revenue</div>
+              <div class="stat-value" id="admStatRevenue">₹0</div>
+              <div class="stat-change stat-up">MySQL synchronized</div>
+            </div>
+            <div class="stat-icon" style="background:#E8F8EE;">💰</div>
+          </div>
+          <div class="stat-card">
+            <div>
+              <div class="stat-label">Active Users</div>
+              <div class="stat-value" id="admStatUsers">0</div>
+              <div class="stat-change stat-up">Verified accounts</div>
+            </div>
+            <div class="stat-icon" style="background:#EFF6FF;">👥</div>
+          </div>
+          <div class="stat-card">
+            <div>
+              <div class="stat-label">Pending Orders</div>
+              <div class="stat-value" id="admStatPending" style="color:var(--primary);">0</div>
+              <div class="stat-change">Requires kitchen action</div>
+            </div>
+            <div class="stat-icon" style="background:#FEF2F2;">⏳</div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:1.5rem;">
+          <div class="card-header">
+            <span class="card-title">Recent Customer Orders</span>
+            <button class="filter-btn outline" style="font-size:0.8rem;" onclick="showAdminPage('orders', document.querySelectorAll('.admin-nav-item')[1])">View All Orders</button>
+          </div>
+          <div class="card-body" style="padding:0;">
+            <table class="data-table" id="admRecentOrdersTable"></table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ORDERS -->
+      <div class="admin-page" id="admin-page-orders">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">All Customer Orders</span>
+          </div>
+          <div class="data-table-container">
+            <table class="data-table" id="admOrdersTable"></table>
+          </div>
+        </div>
+      </div>
+
+      <!-- USERS -->
+      <div class="admin-page" id="admin-page-users">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">User Accounts Directory</span>
+          </div>
+          <div class="data-table-container">
+            <table class="data-table" id="admUsersTable"></table>
+          </div>
+        </div>
+      </div>
+
+      <!-- RESTAURANTS -->
+      <div class="admin-page" id="admin-page-restaurants">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Registered Restaurant Partners</span>
+          </div>
+          <div class="data-table-container">
+            <table class="data-table" id="admRestaurantsTable"></table>
+          </div>
+        </div>
+      </div>
+
+      <!-- MENU -->
+      <div class="admin-page" id="admin-page-menu">
+        <div id="admMenuItemsContainer"></div>
+      </div>
+
+      <!-- PAYMENTS -->
+      <div class="admin-page" id="admin-page-payments">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Payment Transactions & Invoices</span>
+          </div>
+          <div class="data-table-container">
+            <table class="data-table" id="admPaymentsTable"></table>
+          </div>
+        </div>
+      </div>
+
+      <!-- SETTINGS & PROMO COUPONS -->
+      <div class="admin-page" id="admin-page-settings">
+        <div class="two-col">
+          <!-- Platform Configuration -->
+          <div class="card">
+            <div class="card-header"><span class="card-title">⚙️ Platform Configuration</span></div>
+            <div class="card-body">
+              <div class="form-group">
+                <label>Platform Name</label>
+                <input type="text" id="admSetPlatformName" value="FoodFlow">
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Default Delivery Fee (₹)</label>
+                  <input type="number" id="admSetDeliveryFee" value="40" min="0" max="500">
+                </div>
+                <div class="form-group">
+                  <label>Platform Commission Fee (₹)</label>
+                  <input type="number" id="admSetPlatformFee" value="5" min="0" max="100">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Support Helpline Number</label>
+                  <input type="text" id="admSetSupportPhone" value="+91 1800-200-8899">
+                </div>
+                <div class="form-group">
+                  <label>Support Email Address</label>
+                  <input type="email" id="admSetSupportEmail" value="support@foodflow.com">
+                </div>
+              </div>
+              <button class="btn-primary" style="margin-top:0.5rem;" onclick="savePlatformSettingsForm()">
+                💾 Save Global Configuration
+              </button>
+            </div>
+          </div>
+
+          <!-- 2. Promo Coupons & Discounts Management -->
+          <div class="card">
+            <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+              <span class="card-title">🎟️ Promo Codes & Coupons (<span id="admPromoCountBadge">0</span>)</span>
+              <button class="btn-primary" style="padding:6px 14px; font-size:0.85rem;" onclick="openAddPromoModal()">
+                + Add Coupon
+              </button>
+            </div>
+            <div class="card-body" style="padding:0.75rem 1.25rem;">
+              <div id="admSettingsPromosList"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- PROMO COUPON MODAL (ADD / EDIT) -->
+  <div class="modal-backdrop" id="adminPromoModal">
+    <div class="modal-box" style="width:480px;">
+      <button class="modal-close-btn" onclick="closeAdminModal('adminPromoModal')">✕</button>
+      <h3 id="adminPromoModalTitle">🎟️ Add Promo Coupon</h3>
+      <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:1rem;">Configure coupon discounts, caps, and minimum order requirements.</p>
+      
+      <input type="hidden" id="adminPromoOldCode" value="">
+
+      <div class="form-group">
+        <label>Promo Code <span style="color:var(--danger);">*</span></label>
+        <input type="text" id="adminPromoCodeInput" placeholder="e.g. FOODFLOW50" style="text-transform:uppercase; font-weight:700; letter-spacing:1px;">
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Discount % <span style="color:var(--danger);">*</span></label>
+          <input type="number" id="adminPromoDiscountInput" placeholder="e.g. 50" min="1" max="100">
+        </div>
+        <div class="form-group">
+          <label>Max Discount Cap (₹) <span style="color:var(--danger);">*</span></label>
+          <input type="number" id="adminPromoMaxDiscountInput" placeholder="e.g. 150" min="1" max="5000">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Minimum Order Value (₹) <span style="color:var(--danger);">*</span></label>
+          <input type="number" id="adminPromoMinOrderInput" placeholder="e.g. 199" min="0" max="10000">
+        </div>
+        <div class="form-group" style="display:flex; align-items:center; margin-top:24px;">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:700;">
+            <input type="checkbox" id="adminPromoActiveCheckbox" checked style="width:18px; height:18px; cursor:pointer;">
+            <span>Coupon Active</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Description / Marketing Tagline</label>
+        <input type="text" id="adminPromoDescInput" placeholder="e.g. 50% OFF up to ₹150 on orders above ₹199">
+      </div>
+
+      <div class="field-error" id="err-adminPromo" style="margin-bottom:10px;"></div>
+
+      <div class="modal-actions">
+        <button class="btn-ghost" onclick="closeAdminModal('adminPromoModal')">Cancel</button>
+        <button class="btn-primary" onclick="submitAdminPromoForm()">Save Promo Coupon</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- STATUS MODAL -->
+  <div class="modal-backdrop" id="adminOrderStatusModal">
+    <div class="modal-box" style="width:460px;">
+      <button class="modal-close-btn" onclick="closeAdminModal('adminOrderStatusModal')">✕</button>
+      <h3>Update Order Status</h3>
+      <p style="color:var(--text-muted); font-size:0.88rem; margin-bottom:1rem;">Order: <strong id="admStatusModalOrderId">—</strong></p>
+      
+      <div class="form-group">
+        <label>Select New Status</label>
+        <select id="admStatusSelect" onchange="handleAdminStatusSelectChange()">
+          <option value="pending">⏳ Pending (Order Confirmed)</option>
+          <option value="preparing">👨‍🍳 Preparing in Kitchen</option>
+          <option value="on-the-way">🛵 On the Way (Out for Delivery)</option>
+          <option value="delivered">✓ Delivered to Customer</option>
+          <option value="cancelled">✗ Cancelled</option>
+        </select>
+      </div>
+
+      <!-- Dedicated Admin Cancellation Reason Block -->
+      <div id="admCancelReasonGroup" style="display:none; background:var(--surface2); padding:1rem; border-radius:8px; border:1px solid var(--border); margin-bottom:1rem;">
+        <div style="font-weight:700; color:var(--danger); margin-bottom:8px; font-size:0.9rem; display:flex; align-items:center; gap:6px;">
+          <span>✕</span> Specify Cancellation Reason
+        </div>
+        <div class="form-group" style="margin-bottom:8px;">
+          <label style="font-size:0.82rem;">Primary Reason <span style="color:var(--danger);">*</span></label>
+          <select id="admCancelReasonSelect" style="font-size:0.88rem;">
+            <option value="Kitchen closed / Item out of stock">Kitchen closed / Item out of stock</option>
+            <option value="Restaurant unable to fulfill order">Restaurant unable to fulfill order</option>
+            <option value="Delivery partner unavailable in customer area">Delivery partner unavailable in customer area</option>
+            <option value="Customer address unserviceable / Phone unreachable">Customer address unserviceable / Phone unreachable</option>
+            <option value="Severe weather / Traffic interruption">Severe weather / Traffic interruption</option>
+            <option value="Operational delay / System cancellation">Operational delay / System cancellation</option>
+            <option value="Customer requested cancellation via call">Customer requested cancellation via call</option>
+            <option value="Other reason">Other reason</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:8px;">
+          <label style="font-size:0.82rem;">Admin Remarks / Notes (Optional)</label>
+          <textarea id="admCancelNotes" placeholder="Enter specific explanation for customer & logs..." style="height:55px; resize:none; font-size:0.85rem;"></textarea>
+        </div>
+        <div style="font-size:0.78rem; color:#166534; background:#E8F8EE; padding:8px 10px; border-radius:6px; border:1px solid #86EFAC; line-height:1.4;">
+          <strong>✓ Prepaid Orders:</strong> Automated 100% refund is credited back to customer's payment method.<br>
+          <strong>💵 Cash on Delivery Orders:</strong> Any collected cash will be returned directly by the delivery executive.
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-ghost" onclick="closeAdminModal('adminOrderStatusModal')">Cancel</button>
+        <button class="btn-primary" onclick="submitAdminOrderStatus()">Save & Sync Status</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RECEIPT MODAL -->
+  <div class="modal-backdrop" id="receiptModal">
+    <div class="modal-box" style="width:480px;">
+      <button class="modal-close-btn" onclick="closeAdminModal('receiptModal')">✕</button>
+      <div id="receiptModalContent"></div>
+      <div class="modal-actions">
+        <button class="btn-ghost" onclick="closeAdminModal('receiptModal')">Close</button>
+        <button class="btn-primary" onclick="window.print()">🖨️ Print Invoice</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div class="toast" id="globalToast"></div>
+
+  <!-- SCRIPTS -->
+  <script src="store.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
