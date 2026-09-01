@@ -3407,3 +3407,33 @@ img, video, svg, canvas {
   background: var(--primary-dark);
   transform: translateY(-1px);
 }
+/* ═══════════════════════ DATABASE CONNECTION STATUS BADGE ═══════════════════════ */
+.db-status-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  background: #F3F1ED !important;
+  border: 1.5px solid #E5E2DA !important;
+  padding: 6px 14px !important;
+  border-radius: 20px !important;
+  font-size: 0.82rem !important;
+  font-weight: 600 !important;
+  color: #1A1A2E !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04) !important;
+}
+.db-status-badge:hover {
+  border-color: #E85D2F !important;
+  background: #FFF0EB !important;
+  color: #C94B20 !important;
+  box-shadow: 0 2px 8px rgba(232, 93, 47, 0.15) !important;
+}
+.live-dot {
+  width: 9px !important;
+  height: 9px !important;
+  border-radius: 50% !important;
+  background: #10B981;
+  display: inline-block !important;
+  flex-shrink: 0 !important;
+}
