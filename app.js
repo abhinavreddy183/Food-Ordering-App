@@ -3440,7 +3440,73 @@
       });
     }
   }
+  // ═══════════════════════ SECURE ADMIN ACCESS CONTROL ═══════════════════════
+  function checkAdminAuth() {
+    const gatekeeper = document.getElementById('adminAuthGatekeeper');
+    const protectedWrapper = document.getElementById('protectedAdminWrapper');
+    if (!gatekeeper && !protectedWrapper) return;
 
+    const isAdminLoggedIn = sessionStorage.getItem('foodflow_admin_auth') === 'true';
+
+    if (isAdminLoggedIn) {
+      if (gatekeeper) gatekeeper.style.display = 'none';
+      if (protectedWrapper) protectedWrapper.style.display = 'flex';
+      renderAdminDashboard();
+    } else {
+      if (gatekeeper) gatekeeper.style.display = 'flex';
+      if (protectedWrapper) protectedWrapper.style.display = 'none';
+    }
+  }
+
+  function handleAdminLogin() {
+    const emailInput = document.getElementById('adminLoginEmail');
+    const passInput = document.getElementById('adminLoginPassword');
+    const errEl = document.getElementById('err-adminLogin');
+
+    const email = (emailInput ? emailInput.value : '').trim().toLowerCase();
+    const pass = (passInput ? passInput.value : '');
+
+    if (!email) {
+      if (errEl) errEl.textContent = '⚠️ Please enter administrator email or username.';
+      if (emailInput) emailInput.focus();
+      return;
+    }
+    if (!pass) {
+      if (errEl) errEl.textContent = '⚠️ Please enter administrator password.';
+      if (passInput) passInput.focus();
+      return;
+    }
+
+    let isSuperAdmin = (email === 'admin@foodflow.com' || email === 'admin') && (pass === 'admin123' || pass === 'admin');
+
+    if (isSuperAdmin) {
+      sessionStorage.setItem('foodflow_admin_auth', 'true');
+      if (errEl) errEl.textContent = '';
+      if (emailInput) emailInput.value = '';
+      if (passInput) passInput.value = '';
+      
+      SoundEffects.playSuccess();
+      showToast('✓ Welcome, Administrator! Dashboard unlocked.', 'success');
+      checkAdminAuth();
+    } else {
+      SoundEffects.playError();
+      if (errEl) errEl.textContent = '⛔ Access Denied: Invalid administrator credentials.';
+      if (passInput) {
+        passInput.value = '';
+        passInput.focus();
+      }
+    }
+  }
+
+  function handleAdminLogout() {
+    sessionStorage.removeItem('foodflow_admin_auth');
+    showToast('Admin portal session locked.', 'info');
+    checkAdminAuth();
+  }
+
+  window.checkAdminAuth = checkAdminAuth;
+  window.handleAdminLogin = handleAdminLogin;
+  window.handleAdminLogout = handleAdminLogout;
   // Window exports for HTML attributes
   window.switchGlobalPortal = switchGlobalPortal;
   window.showCustomerScreen = showCustomerScreen;
