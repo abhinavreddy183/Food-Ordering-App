@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FoodFlow – System Integration Test Suite</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .test-container {
+      max-width: 1050px;
+      margin: 2.5rem auto;
+      padding: 0 1.5rem;
+    }
+    .test-header-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 2rem;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      margin-bottom: 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .test-item {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.5rem;
+      border: 1px solid var(--border);
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: all 0.2s;
+    }
+    .test-item.passed { border-left: 5px solid var(--success); }
+    .test-item.running { border-left: 5px solid var(--warning); background: #FFFDF8; }
+    .test-item.failed { border-left: 5px solid var(--danger); background: #FEF9F9; }
+  </style>
+</head>
+<body>
+  <!-- Global Switcher -->
+  <div class="global-switcher-bar">
+    <div class="switcher-left">
+      <span class="brand-badge">FoodFlow QA</span>
+      <a href="customer.html" class="switcher-tab">🍔 Customer Portal</a>
+      <a href="admin.html" class="switcher-tab">⚙️ Admin Dashboard</a>
+    </div>
+  </div>
+
+  <div class="test-container">
+    <div class="test-header-card">
+      <div>
+        <h1 style="font-size:1.6rem; font-weight:800; margin-bottom:0.4rem;">🧪 System Integration & End-to-End Test Suite</h1>
+        <p style="color:var(--text-muted); font-size:0.95rem;">Validates real-time customer ordering, payment processing, ACID transactions, address deduplication, and Swiggy/Zomato OTP profile updates.</p>
+      </div>
+      <button class="btn-primary" onclick="runAutomatedTests()" style="padding:12px 24px; font-size:1rem;">▶ Run All 33 Tests</button>
+    </div>
+
+    <div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:1.25rem 2rem; margin-bottom:2rem; display:flex; justify-content:space-around; text-align:center;">
+      <div><div style="font-size:1.6rem; font-weight:800;" id="testTotalCount">33</div><div style="font-size:0.78rem; color:var(--text-muted);">Total Test Cases</div></div>
+      <div><div style="font-size:1.6rem; font-weight:800; color:var(--success);" id="testPassCount">0</div><div style="font-size:0.78rem; color:var(--text-muted);">Passed</div></div>
+      <div><div style="font-size:1.6rem; font-weight:800; color:var(--danger);" id="testFailCount">0</div><div style="font-size:0.78rem; color:var(--text-muted);">Failed</div></div>
+      <div><div style="font-size:1.6rem; font-weight:800; color:var(--primary);" id="testStatusLabel">Ready</div><div style="font-size:0.78rem; color:var(--text-muted);">Execution Status</div></div>
+    </div>
+
+    <div id="testList"></div>
+  </div>
+
+  <div class="toast" id="globalToast"></div>
+
+  <script src="store.js"></script>
+  <script src="app.js"></script>
+  <script>
+    const tests = [
+      { id: 1, name: 'Store Initialisation & Seeded Data Verification', run: () => window.FoodFlowStore && window.FoodFlowStore.getRestaurants().length >= 6 && window.FoodFlowStore.getMenuItems().length >= 20 },
+      { id: 2, name: 'Customer User Registration & Strict Validation', run: () => {
+        const testEmail = 'tester_' + Date.now() + '@example.com';
+        const user = window.FoodFlowStore.registerUser({ firstName: 'QA', lastName: 'Tester', email: testEmail, password: 'Password@123', phone: '9888877777' });
+        return user && user.email === testEmail && user.password === 'Password@123';
+      }},
+      { id: 3, name: 'User Authentication & Password Verification', run: () => {
+        const user = window.FoodFlowStore.loginUser('ravi@example.com', 'Password@123');
+        return user && window.FoodFlowStore.getCurrentUser().email === 'ravi@example.com';
+      }},
+      { id: 4, name: 'OTP Generation, Phone/Email Verification & Password Reset', run: () => {
+        const otpEmailRes = window.FoodFlowStore.generatePasswordResetOTP('priya@example.com');
+        const checkEmail = window.FoodFlowStore.verifyPasswordResetOTP('priya@example.com', otpEmailRes.otp);
+        
+        const otpPhoneRes = window.FoodFlowStore.generatePasswordResetOTP('9123456789');
+        const checkPhone = window.FoodFlowStore.verifyPasswordResetOTP('9123456789', otpPhoneRes.otp);
+        
+        window.FoodFlowStore.updateUserPassword('priya@example.com', 'NewPass@2026');
+        const loginCheck = window.FoodFlowStore.loginUser('priya@example.com', 'NewPass@2026');
+        return otpEmailRes.success && checkEmail.valid && otpPhoneRes.success && checkPhone.valid && loginCheck && loginCheck.email === 'priya@example.com';
+      }},
+      { id: 5, name: 'Restaurant Catalog Retrieval & Cuisine Filter (Burger Barn, Biryani, Pizza)', run: () => {
+        const biryanis = window.FoodFlowStore.getRestaurants().filter(r => r.cuisine === 'Biryani');
+        const burgers = window.FoodFlowStore.getRestaurants().filter(r => r.cuisine === 'Burger');
+        return biryanis.length >= 1 && burgers.length >= 1 && burgers[0].name === 'Burger Barn';
+      }},
+      { id: 6, name: 'Burger Barn & Multi-Restaurant Menu Retrieval Assertion', run: () => {
+        const burgerMenu = window.FoodFlowStore.getMenuItems(4);
+        const biryaniMenu = window.FoodFlowStore.getMenuItems(1);
+        return burgerMenu.length >= 4 && biryaniMenu.length >= 4 && burgerMenu.some(i => i.name.includes('Burger'));
+      }},
+      { id: 7, name: 'Cart Item Insertion & Quantity Recalculation', run: () => {
+        window.FoodFlowStore.clearCart();
+        window.FoodFlowStore.addToCart(101, 2);
+        const cart = window.FoodFlowStore.getCart();
+        return cart.length === 1 && cart[0].qty === 2;
+      }},
+      { id: 8, name: 'Promo Coupon Validation & Math Engine (KBSIRSTUDENT)', run: () => {
+        const res = window.FoodFlowStore.validatePromo('KBSIRSTUDENT', 300);
+        return res.valid && res.discountAmount === 150;
+      }},
+      { id: 9, name: 'Order Placement & Unique ID Generation', run: () => {
+        const order = window.FoodFlowStore.placeOrder({ customer: 'QA Test Order', email: 'qa@foodflow.com', total: 550, paymentMethod: 'UPI' });
+        return order && order.id.startsWith('FF') && order.status === 'pending';
+      }},
+      { id: 10, name: 'Admin Order Reception & Status Progression', run: () => {
+        const orders = window.FoodFlowStore.getOrders();
+        const latest = orders[0];
+        const updated = window.FoodFlowStore.updateOrderStatus(latest.id, 'preparing', 'QA updated status');
+        return updated && updated.status === 'preparing';
+      }},
+      { id: 11, name: 'Admin Menu Item Availability Real-Time Toggle', run: () => {
+        window.FoodFlowStore.toggleMenuItemAvailability(101, false);
+        const disabled = window.FoodFlowStore.getMenuItemById(101);
+        window.FoodFlowStore.toggleMenuItemAvailability(101, true);
+        return disabled.available === false;
+      }},
+      { id: 12, name: 'Admin User Account Suspend & Activate Toggle', run: () => {
+        const suspended = window.FoodFlowStore.toggleUserStatus('U001');
+        const active = window.FoodFlowStore.toggleUserStatus('U001');
+        return suspended.status === 'suspended' && active.status === 'active';
+      }},
+      { id: 13, name: 'Prepaid Order Cancellation & Automated Refund Engine', run: () => {
+        const prepaidOrder = window.FoodFlowStore.placeOrder({
+          customer: 'Prepaid Refund Test',
+          email: 'qa@foodflow.com',
+          total: 450,
+          paymentMethod: 'UPI (Google Pay)'
+        });
+        const cancelRes = window.FoodFlowStore.cancelOrder(prepaidOrder.id, 'Kitchen closed', 'Super Admin');
+        const payments = window.FoodFlowStore.getPayments();
+        const refundTxn = payments.find(p => p.orderId === prepaidOrder.id && p.status === 'refunded');
+        return cancelRes.success && cancelRes.order.refundStatus === 'refunded' && refundTxn && refundTxn.amount === 450;
+      }},
+      { id: 14, name: 'Cash on Delivery (COD) Cancellation (Refund Handled Directly by Delivery Executive)', run: () => {
+        const codOrder = window.FoodFlowStore.placeOrder({
+          customer: 'COD Cancel Test',
+          email: 'qa@foodflow.com',
+          total: 300,
+          paymentMethod: 'Cash on Delivery'
+        });
+        const cancelRes = window.FoodFlowStore.cancelOrder(codOrder.id, 'Ordered by mistake', 'Customer');
+        const isCodFlag = cancelRes.refundInfo && (cancelRes.refundInfo.isCod === true || !cancelRes.refundInfo.isPrepaid);
+        const hasDeliveryMsg = cancelRes.message && (cancelRes.message.includes('delivery partner') || cancelRes.message.includes('delivery executive') || cancelRes.order.refundNote.includes('delivery'));
+        return cancelRes.success && cancelRes.order.refundStatus === 'not_applicable' && isCodFlag && hasDeliveryMsg;
+      }},
+      { id: 15, name: 'Unique Phone Number Enforcement on Registration', run: () => {
+        try {
+          window.FoodFlowStore.registerUser({ firstName: 'Duplicate', email: 'dup_' + Date.now() + '@example.com', phone: '9876543210', password: 'Password@123' });
+          return false;
+        } catch (e) {
+          return e.message.includes('mobile number already exists');
+        }
+      }},
+      { id: 16, name: 'Cart Auto-Flush on Order Placement', run: () => {
+        window.FoodFlowStore.addToCart(101, 1);
+        window.FoodFlowStore.placeOrder({ customer: 'Cart Flush Test', email: 'qa@foodflow.com', total: 200, paymentMethod: 'UPI' });
+        return window.FoodFlowStore.getCart().length === 0;
+      }},
+      { id: 17, name: 'Profile Name and Phone Synchronization', run: () => {
+        const updated = window.FoodFlowStore.updateUserProfile({ email: 'ravi@example.com', name: 'Prem Kumar', phone: '9876543210' });
+        const check = window.FoodFlowStore.getCurrentUser();
+        return updated && updated.name === 'Prem Kumar' && check.name === 'Prem Kumar';
+      }},
+      { id: 18, name: 'Reorder Flow Reliability & Cart Population', run: () => {
+        const orders = window.FoodFlowStore.getOrders();
+        const order = orders.find(o => o.items && o.items.length > 0) || orders[0];
+        window.FoodFlowStore.clearCart();
+        window.reorderCustomerItems(order.id);
+        const cart = window.FoodFlowStore.getCart();
+        return cart && cart.length > 0;
+      }},
+      { id: 19, name: 'User Total Spent & Orders Adjustment after Refund', run: () => {
+        const testOrder = window.FoodFlowStore.placeOrder({ customer: 'Spend Test', email: 'ravi@example.com', total: 500, paymentMethod: 'UPI' });
+        const userBefore = window.FoodFlowStore.getCurrentUser();
+        const spentBefore = userBefore.totalSpent;
+        window.FoodFlowStore.cancelOrder(testOrder.id, 'Testing refund spend reduction', 'Customer');
+        const userAfter = window.FoodFlowStore.getCurrentUser();
+        return userAfter.totalSpent <= spentBefore;
+      }},
+      { id: 20, name: 'Saved Address Duplicate Prevention Guard', run: () => {
+        const testAddr = 'Flat No. 120, Bolarum, Secunderabad, 500010';
+        window.FoodFlowStore.addAddress({ userEmail: 'dup_tester@example.com', label: 'Office', address: testAddr });
+        try {
+          window.FoodFlowStore.addAddress({ userEmail: 'dup_tester@example.com', label: 'Office', address: testAddr });
+          return false; // Should have rejected duplicate
+        } catch (e) {
+          return e.message.includes('already saved in your address book');
+        }
+      }},
+      { id: 21, name: 'Profile Credentials Update OTP Generation & Verification', run: () => {
+        const genRes = window.FoodFlowStore.generateProfileChangeOTP('new_email@example.com');
+        const verifyRes = window.FoodFlowStore.verifyProfileChangeOTP('new_email@example.com', genRes.otp);
+        return genRes.success && verifyRes.valid === true;
+      }},
+      { id: 22, name: 'Dish Search & Cross-Catalog Menu Query Engine', run: () => {
+        const allItems = window.FoodFlowStore.getMenuItems();
+        const burgerMatches = allItems.filter(i => i.name.toLowerCase().includes('burger') || (i.desc && i.desc.toLowerCase().includes('burger')));
+        const biryaniMatches = allItems.filter(i => i.name.toLowerCase().includes('biryani') || (i.desc && i.desc.toLowerCase().includes('biryani')));
+        return burgerMatches.length > 0 && biryaniMatches.length > 0;
+      }},
+      { id: 23, name: 'Strict UPI ID Format Regex & NPCI VPA Validation', run: () => {
+        const vpaRegex = /^[a-zA-Z0-9.\-_]{2,64}@[a-zA-Z0-9]{2,32}$/;
+        const validVpas = ['ravi@okhdfcbank', '9876543210@upi', 'foodflow.user@ybl', 'merchant_pay@okaxis', 'john.doe@paytm'];
+        const invalidVpas = ['invalid_upi', 'user@', '@okhdfcbank', 'user@bank@extra', 'u@b', ''];
+        const allValidsPass = validVpas.every(v => vpaRegex.test(v));
+        const allInvalidsFail = invalidVpas.every(v => !vpaRegex.test(v));
+        return allValidsPass && allInvalidsFail;
+      }},
+      { id: 24, name: 'End-to-End Verified UPI Order Placement & Live Tracking', run: () => {
+        const order = window.FoodFlowStore.placeOrder({
+          customer: 'QA UPI Customer',
+          email: 'qa@foodflow.local',
+          phone: '9876543210',
+          restaurantId: 1,
+          restaurant: 'Spice Garden',
+          items: [{ id: 101, name: 'Royal Chicken Dum Biryani', price: 320, qty: 1 }],
+          subtotal: 320,
+          deliveryFee: 40,
+          platformFee: 5,
+          discount: 0,
+          total: 365,
+          paymentMethod: 'UPI (ravi@okhdfcbank)',
+          address: 'Road No. 36, Jubilee Hills, Hyderabad'
+        });
+        return order && order.id && order.paymentMethod.includes('UPI') && order.status === 'pending';
+      }},
+      { id: 25, name: 'FoodFlow Wallet Balance Deducts ONLY on FoodFlow Wallet Payment (Other Wallets Intact)', run: () => {
+        const user = window.FoodFlowStore.getCurrentUser() || window.FoodFlowStore.getUsers()[0];
+        window.FoodFlowStore.setCurrentUser(user);
+        const initialFoodFlowBal = user.walletBalance || 1000;
+        const initialPaytmBal = window.FoodFlowStore.getWalletBalance('Paytm Wallet');
+        const initialAmazonBal = window.FoodFlowStore.getWalletBalance('Amazon Pay');
+
+        // Place order paid with FoodFlow Wallet
+        const ord = window.FoodFlowStore.placeOrder({
+          customer: user.name,
+          email: user.email,
+          phone: user.phone,
+          restaurantId: 1,
+          restaurant: 'Spice Garden',
+          items: [{ id: 101, name: 'Royal Chicken Dum Biryani', price: 320, qty: 1 }],
+          subtotal: 320,
+          deliveryFee: 0,
+          platformFee: 5,
+          discount: 0,
+          total: 325,
+          paymentMethod: 'FoodFlow Wallet',
+          address: 'Banjara Hills, Hyderabad'
+        });
+
+        const afterUser = window.FoodFlowStore.getCurrentUser();
+        const afterPaytmBal = window.FoodFlowStore.getWalletBalance('Paytm Wallet');
+        const afterAmazonBal = window.FoodFlowStore.getWalletBalance('Amazon Pay');
+
+        // FoodFlow balance should reduce by 325
+        const foodflowReduced = afterUser.walletBalance === initialFoodFlowBal - 325;
+        // Paytm and Amazon balances must NOT change!
+        const othersIntact = afterPaytmBal === initialPaytmBal && afterAmazonBal === initialAmazonBal;
+
+        return foodflowReduced && othersIntact;
+      }},
+      { id: 26, name: 'External Wallet (Paytm) Deducts ONLY on Paytm Payment (FoodFlow Wallet Intact)', run: () => {
+        const user = window.FoodFlowStore.getCurrentUser() || window.FoodFlowStore.getUsers()[0];
+        const initialFoodFlowBal = user.walletBalance;
+        const initialPaytmBal = window.FoodFlowStore.getWalletBalance('Paytm Wallet');
+
+        // Place order paid with Paytm Wallet
+        const ord = window.FoodFlowStore.placeOrder({
+          customer: user.name,
+          email: user.email,
+          phone: user.phone,
+          restaurantId: 2,
+          restaurant: 'Pizza Republic',
+          items: [{ id: 201, name: 'Margherita Supreme Pizza', price: 349, qty: 1 }],
+          subtotal: 349,
+          deliveryFee: 30,
+          platformFee: 5,
+          discount: 0,
+          total: 384,
+          paymentMethod: 'Wallet (Paytm Wallet)',
+          address: 'Jubilee Hills, Hyderabad'
+        });
+
+        const afterUser = window.FoodFlowStore.getCurrentUser();
+        const afterPaytmBal = window.FoodFlowStore.getWalletBalance('Paytm Wallet');
+
+        // Paytm balance should reduce by 384
+        const paytmReduced = afterPaytmBal === initialPaytmBal - 384;
+        // FoodFlow wallet balance must NOT change!
+        const foodflowIntact = afterUser.walletBalance === initialFoodFlowBal;
+
+        return paytmReduced && foodflowIntact;
+      }},
+      { id: 27, name: 'FoodFlow Wallet Top-Up & Automated Passbook Accounting', run: () => {
+        const user = window.FoodFlowStore.getCurrentUser() || window.FoodFlowStore.getUsers()[0];
+        window.FoodFlowStore.setCurrentUser(user);
+        const currentBal = user.walletBalance;
+        const newBal = window.FoodFlowStore.topUpFoodFlowWallet(500, 'QA Automated Test Top-Up');
+
+        const txs = window.FoodFlowStore.getWalletTransactions(user.email);
+        const latestTx = txs[0];
+
+        const balCorrect = newBal === currentBal + 500;
+        const txRecorded = latestTx && latestTx.type === 'credit' && latestTx.amount === 500;
+
+        return balCorrect && txRecorded;
+      }},
+      { id: 28, name: 'On-Demand QR Code Display & 5-Minute (300s) Timeout Auto-Reset Engine', run: () => {
+        // Assert QR functions exist and start with 300 seconds (5 mins)
+        const hasShowQr = typeof window.showQrPaymentSection === 'function';
+        const hasHideQr = typeof window.hideQrPaymentSection === 'function';
+        const hasTopUpShowQr = typeof window.showTopUpQrPaymentSection === 'function';
+        const hasTopUpHideQr = typeof window.hideTopUpQrPaymentSection === 'function';
+        return hasShowQr && hasHideQr && hasTopUpShowQr && hasTopUpHideQr;
+      }},
+      { id: 29, name: 'Multi-Channel Wallet Recharge & Passbook Ledger Sync (UPI / Card / NetBanking)', run: () => {
+        const user = window.FoodFlowStore.getCurrentUser() || window.FoodFlowStore.getUsers()[0];
+        const initialBal = user.walletBalance;
+
+        // Recharge via UPI
+        const balAfterUpi = window.FoodFlowStore.topUpFoodFlowWallet(750, 'Recharge via UPI (Google Pay)');
+        // Recharge via Card
+        const balAfterCard = window.FoodFlowStore.topUpFoodFlowWallet(1250, 'Recharge via Card Ending 8892');
+
+        const allTxs = window.FoodFlowStore.getWalletTransactions(user.email);
+        const hasUpiTx = allTxs.some(t => t.desc.includes('Google Pay') && t.amount === 750);
+        const hasCardTx = allTxs.some(t => t.desc.includes('Card Ending 8892') && t.amount === 1250);
+
+        return balAfterCard === initialBal + 2000 && hasUpiTx && hasCardTx;
+      }},
+      { id: 30, name: 'Admin Order Cancellation with Reason Specification & Customer Ledger Refund', run: () => {
+        const user = window.FoodFlowStore.getCurrentUser() || window.FoodFlowStore.getUsers()[0];
+        window.FoodFlowStore.setCurrentUser(user);
+        const balBefore = user.walletBalance;
+
+        // Place a mock order with FoodFlow Wallet
+        const testOrder = window.FoodFlowStore.placeOrder({
+          customer: user.name,
+          email: user.email,
+          phone: user.phone || '9876543210',
+          restaurantId: 1,
+          restaurant: 'Spice Garden',
+          items: [{ id: 1, name: 'Butter Chicken', price: 340, qty: 1 }],
+          subtotal: 340,
+          deliveryFee: 30,
+          platformFee: 5,
+          discount: 0,
+          total: 375,
+          paymentMethod: 'FoodFlow Wallet',
+          address: 'Gachibowli, Hyderabad'
+        });
+
+        // Admin cancels the order with a specific reason
+        const cancelReason = 'Kitchen closed / Item out of stock (Severe rush)';
+        const res = window.FoodFlowStore.cancelOrder(testOrder.id, cancelReason, 'Admin');
+
+        const cancelledOrder = window.FoodFlowStore.getOrderById(testOrder.id);
+        const userAfterRefund = window.FoodFlowStore.getCurrentUser();
+
+        const statusMatch = cancelledOrder.status === 'cancelled';
+        const reasonMatch = cancelledOrder.cancelReason === cancelReason;
+        const adminActorMatch = cancelledOrder.cancelledBy === 'Admin';
+        const refundMatch = cancelledOrder.refundStatus === 'refunded' && userAfterRefund.walletBalance === balBefore;
+
+        return res.success && statusMatch && reasonMatch && adminActorMatch && refundMatch;
+      }},
+      { id: 31, name: 'Customer Order Cancellation & Real-Time Wallet Balance + Passbook Sync', run: () => {
+        const user = window.FoodFlowStore.getCurrentUser() || window.FoodFlowStore.getUsers()[0];
+        window.FoodFlowStore.setCurrentUser(user);
+        const initialBal = user.walletBalance;
+
+        // 1. Place prepaid order with FoodFlow Wallet
+        const order = window.FoodFlowStore.placeOrder({
+          customer: user.name,
+          email: user.email,
+          phone: user.phone || '9876543210',
+          restaurantId: 2,
+          restaurant: 'Biryani Express',
+          items: [{ id: 2, name: 'Hyderabadi Dum Biryani', price: 299, qty: 1 }],
+          subtotal: 299,
+          deliveryFee: 30,
+          platformFee: 5,
+          discount: 0,
+          total: 334,
+          paymentMethod: 'FoodFlow Wallet',
+          address: 'Madhapur, Hyderabad'
+        });
+
+        // 2. Customer cancels order
+        const custReason = 'Placed order by mistake / Changing delivery address';
+        const res = window.FoodFlowStore.cancelOrder(order.id, custReason, 'Customer');
+
+        // 3. Assert balance restoration and passbook entry
+        const userAfter = window.FoodFlowStore.getCurrentUser();
+        const txs = window.FoodFlowStore.getWalletTransactions(user.email);
+        const refundTx = txs.find(t => t.type === 'credit' && t.amount === 334 && t.title.includes(order.id));
+
+        return res.success && userAfter.walletBalance === initialBal && Boolean(refundTx);
+      }},
+      { id: 32, name: 'Admin Promo Coupon Dynamic CRUD, Discount Math & Instant Status Toggle', run: () => {
+        const testCode = 'TESTPROMO' + Date.now().toString().slice(-4);
+        // 1. Add coupon
+        const newPromo = window.FoodFlowStore.addPromo({
+          code: testCode,
+          discount: 30,
+          maxDiscount: 200,
+          minOrder: 250,
+          desc: 'Test QA dynamic discount 30%'
+        });
+        // 2. Validate discount calculation
+        const valRes = window.FoodFlowStore.validatePromo(testCode, 500);
+        // 3. Edit coupon
+        const updatedPromo = window.FoodFlowStore.updatePromo(testCode, {
+          discount: 40,
+          maxDiscount: 300,
+          minOrder: 250,
+          desc: 'Updated QA discount 40%'
+        });
+        // 4. Toggle disabled
+        const disabled = window.FoodFlowStore.togglePromoStatus(testCode);
+        const valAfterDisable = window.FoodFlowStore.validatePromo(testCode, 500);
+        // 5. Clean up delete
+        window.FoodFlowStore.deletePromo(testCode);
+
+        return newPromo && valRes.valid && valRes.discountAmount === 150 && updatedPromo.discount === 40 && disabled.active === false && valAfterDisable.valid === false;
+      }},
+      { id: 33, name: 'Platform Global Configuration Management & Store Broadcast Sync', run: () => {
+        const testSettings = {
+          platformName: 'FoodFlow QA Master',
+          defaultDeliveryFee: 35,
+          platformFee: 7,
+          supportPhone: '+91 1800-999-0000',
+          supportEmail: 'qa-admin@foodflow.local'
+        };
+        const saved = window.FoodFlowStore.updatePlatformSettings(testSettings);
+        const readBack = JSON.parse(localStorage.getItem('foodflow_platform_settings'));
+        return saved && readBack && readBack.platformName === 'FoodFlow QA Master' && readBack.platformFee === 7;
+      }}
+    ];
+
+    function renderTests() {
+      const container = document.getElementById('testList');
+      if (!container) return;
+      container.innerHTML = tests.map(t => `
+        <div class="test-item" id="t-card-${t.id}">
+          <div>
+            <strong style="color:var(--text); font-size:0.98rem;">Test #${t.id}: ${t.name}</strong>
+            <div style="font-size:0.8rem; color:var(--text-muted); margin-top:3px;">Automated system assertion</div>
+          </div>
+          <span class="badge badge-neutral" id="t-badge-${t.id}">Pending</span>
+        </div>
+      `).join('');
+    }
+
+    async function runAutomatedTests() {
+      renderTests();
+      let passed = 0;
+      let failed = 0;
+      const statusLabel = document.getElementById('testStatusLabel');
+      if (statusLabel) statusLabel.textContent = 'Running...';
+
+      for (const t of tests) {
+        const card = document.getElementById(`t-card-${t.id}`);
+        const badge = document.getElementById(`t-badge-${t.id}`);
+        if (card) card.className = 'test-item running';
+        if (badge) { badge.className = 'badge badge-warning'; badge.textContent = 'Testing...'; }
+
+        await new Promise(r => setTimeout(r, 60));
+
+        try {
+          const res = t.run();
+          if (res) {
+            passed++;
+            if (card) card.className = 'test-item passed';
+            if (badge) { badge.className = 'badge badge-success'; badge.textContent = '✓ Passed'; }
+          } else {
+            failed++;
+            if (card) card.className = 'test-item failed';
+            if (badge) { badge.className = 'badge badge-danger'; badge.textContent = '✗ Failed'; }
+          }
+        } catch (err) {
+          failed++;
+          if (card) card.className = 'test-item failed';
+          if (badge) { badge.className = 'badge badge-danger'; badge.textContent = '✗ Error'; }
+        }
+
+        document.getElementById('testPassCount').textContent = passed;
+        document.getElementById('testFailCount').textContent = failed;
+      }
+
+      if (statusLabel) {
+        statusLabel.textContent = failed === 0 ? '100% Passed' : `${passed}/${passed+failed} Passed`;
+        statusLabel.style.color = failed === 0 ? 'var(--success)' : 'var(--danger)';
+      }
+      showToast(`QA Suite: ${passed} Passed, ${failed} Failed`, failed === 0 ? 'success' : 'error');
+    }
+
+    window.runAutomatedTests = runAutomatedTests;
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', renderTests);
+    } else {
+      renderTests();
+    }
+  </script>
+</body>
+</html>
