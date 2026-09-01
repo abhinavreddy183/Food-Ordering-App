@@ -3407,3 +3407,27 @@ img, video, svg, canvas {
   background: var(--primary-dark);
   transform: translateY(-1px);
 }
+/* Sidebar Logout Button High-Contrast Visibility */
+.admin-sidebar-logout-btn {
+  width: 100%;
+  padding: 9px 12px;
+  background: rgba(239, 68, 68, 0.18) !important;
+  border: 1.5px solid rgba(239, 68, 68, 0.45) !important;
+  color: #FCA5A5 !important;
+  font-weight: 700 !important;
+  font-size: 0.82rem !important;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+  margin-top: 6px;
+}
+.admin-sidebar-logout-btn:hover {
+  background: #EF4444 !important;
+  color: #FFFFFF !important;
+  border-color: #EF4444 !important;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);
+}
