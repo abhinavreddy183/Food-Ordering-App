@@ -3440,18 +3440,20 @@
       });
     }
   }
-  // ═══════════════════════ SECURE ADMIN ACCESS CONTROL ═══════════════════════
+    // ═══════════════════════ SECURE ADMIN ACCESS CONTROL ═══════════════════════
   function checkAdminAuth() {
     const gatekeeper = document.getElementById('adminAuthGatekeeper');
     const protectedWrapper = document.getElementById('protectedAdminWrapper');
     if (!gatekeeper && !protectedWrapper) return;
 
-    const isAdminLoggedIn = sessionStorage.getItem('foodflow_admin_auth') === 'true';
+    const isAdminLoggedIn = localStorage.getItem('foodflow_admin_auth') === 'true' || sessionStorage.getItem('foodflow_admin_auth') === 'true';
 
     if (isAdminLoggedIn) {
       if (gatekeeper) gatekeeper.style.display = 'none';
       if (protectedWrapper) protectedWrapper.style.display = 'flex';
-      renderAdminDashboard();
+      
+      const savedTab = localStorage.getItem('foodflow_admin_active_tab') || 'dashboard';
+      showAdminPage(savedTab);
     } else {
       if (gatekeeper) gatekeeper.style.display = 'flex';
       if (protectedWrapper) protectedWrapper.style.display = 'none';
@@ -3480,6 +3482,7 @@
     let isSuperAdmin = (email === 'admin@foodflow.com' || email === 'admin') && (pass === 'admin123' || pass === 'admin');
 
     if (isSuperAdmin) {
+      localStorage.setItem('foodflow_admin_auth', 'true');
       sessionStorage.setItem('foodflow_admin_auth', 'true');
       if (errEl) errEl.textContent = '';
       if (emailInput) emailInput.value = '';
@@ -3499,6 +3502,8 @@
   }
 
   function handleAdminLogout() {
+    localStorage.removeItem('foodflow_admin_auth');
+    localStorage.removeItem('foodflow_admin_active_tab');
     sessionStorage.removeItem('foodflow_admin_auth');
     showToast('Admin portal session locked.', 'info');
     checkAdminAuth();
